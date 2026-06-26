@@ -558,7 +558,7 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
                         >
                           <div className="relative min-h-[720px] p-8 pointer-events-none">
                             {blocks.map(renderPreviewBlock)}
-                            {block.stickers?.filter((sticker) => sticker.placed && sticker.id === selectedSticker?.id).map((sticker) => (
+                            {block.stickers?.filter((sticker) => sticker.placed).map((sticker) => (
                               <img
                                 key={sticker.id}
                                 src={sticker.previewUrl || sticker.url}
@@ -569,7 +569,7 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
                                   top: `${sticker.y > 100 ? sticker.y / 6 : sticker.y || 0}%`,
                                   width: `${sticker.width > 100 ? sticker.width / 8 : sticker.width || 22}%`,
                                   transform: `translate(-50%, -50%) rotate(${sticker.rotation || 0}deg)`,
-                                  outline: `1px solid ${theme.textColor}`,
+                                  outline: sticker.id === selectedSticker?.id ? `1px solid ${theme.textColor}` : 'none',
                                 }}
                               />
                             ))}
