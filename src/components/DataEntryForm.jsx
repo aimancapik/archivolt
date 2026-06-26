@@ -10,7 +10,7 @@ const blockFromContent = (block, index) => ({
   url: block.url
 });
 
-export const DataEntryForm = ({ onSave, onCancel, activeColorTheme: theme, activeProject, initialData = null, mode = 'create' }) => {
+export const DataEntryForm = ({ onSave, onCancel, onDelete, activeColorTheme: theme, activeProject, initialData = null, mode = 'create' }) => {
   const isEditing = mode === 'edit';
   // Form States
   const [recordType, setRecordType] = useState(initialData?.recordType || 'document');
@@ -460,12 +460,24 @@ export const DataEntryForm = ({ onSave, onCancel, activeColorTheme: theme, activ
           </div>
         </div>
 
-        <button type="submit"
-          disabled={isSaving}
-          className="w-full py-4 bg-transparent font-display font-bold uppercase flex items-center justify-center gap-2 transition-all cursor-pointer"
-          style={{ border: `1px solid ${theme.textColor}`, fontSize: '14px', letterSpacing: '0.1em', color: theme.textColor, opacity: isSaving ? 0.6 : 1 }}>
-          <Save className="w-4 h-4" /> {isSaving ? 'SAVING...' : isEditing ? 'UPDATE_RECORD' : 'COMMIT_RECORD'}
-        </button>
+        <div className="flex flex-col md:flex-row gap-3">
+          <button type="submit"
+            disabled={isSaving}
+            className="flex-1 py-4 bg-transparent font-display font-bold uppercase flex items-center justify-center gap-2 transition-all cursor-pointer"
+            style={{ border: `1px solid ${theme.textColor}`, fontSize: '14px', letterSpacing: '0.1em', color: theme.textColor, opacity: isSaving ? 0.6 : 1 }}>
+            <Save className="w-4 h-4" /> {isSaving ? 'SAVING...' : isEditing ? 'UPDATE_RECORD' : 'COMMIT_RECORD'}
+          </button>
+          {isEditing && onDelete && (
+            <button
+              type="button"
+              onClick={onDelete}
+              className="py-4 px-5 bg-transparent font-display font-bold uppercase flex items-center justify-center gap-2 transition-all cursor-pointer"
+              style={{ border: '1px solid rgba(255,95,87,0.5)', fontSize: '12px', letterSpacing: '0.1em', color: '#ff5f57' }}
+            >
+              <Trash2 className="w-4 h-4" /> DELETE
+            </button>
+          )}
+        </div>
       </form>
     </div>
   );

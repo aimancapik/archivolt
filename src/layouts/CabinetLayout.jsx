@@ -1,5 +1,5 @@
-import React from 'react';
-import { Plus, Minimize2, Maximize2, ArrowLeft, ArrowRight, Edit3, Trash2 } from 'lucide-react';
+import React, { useState } from 'react';
+import { Plus, Minimize2, Maximize2, ArrowLeft, ArrowRight, Edit3, Trash2, Settings } from 'lucide-react';
 import { cn } from '../utils/helpers';
 import { DataEntryForm } from '../components/DataEntryForm';
 
@@ -32,6 +32,8 @@ export const CabinetLayout = ({
   currentPageData,
   renderContent
 }) => {
+  const [showProjectSettings, setShowProjectSettings] = useState(false);
+
   return (
     <div className="h-full w-full overflow-y-auto px-4 md:px-10 py-10 relative" ref={contentRef} style={{ zIndex: 10 }}>
       <div className="max-w-4xl mx-auto pb-24">
@@ -116,24 +118,28 @@ export const CabinetLayout = ({
             </button>
             <button
               type="button"
-              onClick={handleDeleteDocument}
+              onClick={() => setShowProjectSettings(!showProjectSettings)}
               className="p-2 transition-all flex items-center gap-1.5 font-mono-tech text-xs cursor-pointer"
-              style={{ border: '1px solid rgba(255,95,87,0.35)', background: 'transparent', color: '#ff5f57' }}
-              title="Delete Document"
+              style={{ border: '1px solid rgba(255,255,255,0.15)', background: showProjectSettings ? '#e4decd' : 'transparent', color: showProjectSettings ? '#1a1b1c' : '#e4decd' }}
+              title="Project Settings"
             >
-              <Trash2 className="w-3.5 h-3.5" /> DOC
-            </button>
-            <button
-              type="button"
-              onClick={handleDeleteProject}
-              className="p-2 transition-all flex items-center gap-1.5 font-mono-tech text-xs cursor-pointer"
-              style={{ border: '1px solid rgba(255,95,87,0.35)', background: 'transparent', color: '#ff5f57' }}
-              title="Delete Project"
-            >
-              <Trash2 className="w-3.5 h-3.5" /> PROJECT
+              <Settings className="w-3.5 h-3.5" /> SETTINGS
             </button>
           </div>
         </div>
+
+        {showProjectSettings && (
+          <div className="mb-8 flex justify-end">
+            <button
+              type="button"
+              onClick={handleDeleteProject}
+              className="px-4 py-2 border font-mono-tech text-xs uppercase cursor-pointer flex items-center gap-2"
+              style={{ borderColor: 'rgba(255,95,87,0.45)', color: '#ff5f57', background: 'transparent' }}
+            >
+              <Trash2 className="w-3.5 h-3.5" /> DELETE PROJECT
+            </button>
+          </div>
+        )}
 
         <div style={{ height: 1, background: 'rgba(255,255,255,0.1)', marginBottom: '48px' }} />
 
@@ -150,6 +156,7 @@ export const CabinetLayout = ({
             <div className="folder-body">
               <DataEntryForm
                 onSave={isEditingData ? handleUpdateDocument : handleSaveNewData}
+                onDelete={isEditingData ? handleDeleteDocument : undefined}
                 onCancel={() => { setIsAddingData(false); setIsEditingData(false); }}
                 activeColorTheme={activeTheme}
                 activeProject={activeProject}

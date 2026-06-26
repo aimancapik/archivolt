@@ -1,5 +1,5 @@
-import React from 'react';
-import { Plus, ArrowLeft, ArrowRight, Edit3, Trash2 } from 'lucide-react';
+import React, { useState } from 'react';
+import { Plus, ArrowLeft, ArrowRight, Edit3, Trash2, Settings } from 'lucide-react';
 import { DataEntryForm } from '../components/DataEntryForm';
 
 export const SidebarLayout = ({
@@ -28,6 +28,8 @@ export const SidebarLayout = ({
   handleDeleteProject,
   renderContent
 }) => {
+  const [showProjectSettings, setShowProjectSettings] = useState(false);
+
   return (
     <div className="h-full w-full flex justify-center items-center px-2 md:px-6 lg:px-10 animate-fade-in" style={{ zIndex: 10 }}>
       <div 
@@ -158,23 +160,31 @@ export const SidebarLayout = ({
                 <Edit3 className="w-5 h-5" />
               </button>
               <button
-                onClick={handleDeleteDocument}
+                onClick={() => setShowProjectSettings(!showProjectSettings)}
                 className="p-2 border-2 transition-colors cursor-pointer"
-                style={{ borderColor: '#ff5f57', backgroundColor: 'transparent', color: '#ff5f57' }}
-                title="Delete Document"
+                style={{
+                  borderColor: activeTheme.textColor,
+                  backgroundColor: showProjectSettings ? activeTheme.textColor : 'transparent',
+                  color: showProjectSettings ? activeTheme.bgColor : activeTheme.textColor,
+                }}
+                title="Project Settings"
               >
-                <Trash2 className="w-5 h-5" />
-              </button>
-              <button
-                onClick={handleDeleteProject}
-                className="px-3 py-2 border-2 font-mono-tech text-[10px] uppercase transition-colors cursor-pointer"
-                style={{ borderColor: '#ff5f57', backgroundColor: 'transparent', color: '#ff5f57' }}
-                title="Delete Project"
-              >
-                Project
+                <Settings className="w-5 h-5" />
               </button>
             </div>
           </div>
+
+          {showProjectSettings && (
+            <div className="sticky top-[66px] z-20 px-6 py-3 flex justify-end bg-inherit border-b" style={{ borderColor: activeTheme.borderColor }}>
+              <button
+                onClick={handleDeleteProject}
+                className="px-3 py-2 border-2 font-mono-tech text-[10px] uppercase transition-colors cursor-pointer flex items-center gap-2"
+                style={{ borderColor: '#ff5f57', backgroundColor: 'transparent', color: '#ff5f57' }}
+              >
+                <Trash2 className="w-3.5 h-3.5" /> Delete Project
+              </button>
+            </div>
+          )}
 
           {/* Inner Content Area */}
           <div className="p-6 md:p-12 lg:p-20 max-w-4xl mx-auto relative min-h-full">
@@ -183,6 +193,7 @@ export const SidebarLayout = ({
               // --- RENDER THE NEW DATA ENTRY FORM ---
               <DataEntryForm 
                 onSave={isEditingData ? handleUpdateDocument : handleSaveNewData}
+                onDelete={isEditingData ? handleDeleteDocument : undefined}
                 onCancel={() => { setIsAddingData(false); setIsEditingData(false); }}
                 activeColorTheme={activeTheme}
                 activeProject={activeProject}
