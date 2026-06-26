@@ -2,24 +2,38 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { X, GripVertical, Trash2, Save, Plus, Image, ChevronUp, ChevronDown, RotateCcw } from 'lucide-react';
 import { cn } from '../utils/helpers';
 
-const blockFromContent = (block, index) => ({
-  id: `${Date.now()}-${index}`,
-  type: block.type,
-  value: block.type === 'list' ? (block.items || []).join('\n') : block.caption || block.value || block.defaultCode || '',
-  language: block.language,
-  url: block.url,
-  x: block.x || 0,
-  y: block.y || 0,
-  width: block.width || 180,
-  rotation: block.rotation || 0
+const stickerFromContent = (sticker, index) => ({
+  id: sticker.id || `${Date.now()}-sticker-${index}`,
+  url: sticker.url,
+  x: sticker.x || 0,
+  y: sticker.y || 0,
+  width: sticker.width || 180,
+  rotation: sticker.rotation || 0
 });
+
+const blockFromContent = (block, index) => {
+  const stickers = block.type === 'stickers' ? (block.items || []).map(stickerFromContent) : block.type === 'sticker' ? [stickerFromContent(block, 0)] : [];
+  return {
+    id: `${Date.now()}-${index}`,
+    type: block.type === 'sticker' ? 'stickers' : block.type,
+    value: block.type === 'list' ? (block.items || []).join('\n') : block.caption || block.value || block.defaultCode || '',
+    language: block.language,
+    url: block.url,
+    x: block.x || 0,
+    y: block.y || 0,
+    width: block.width || 180,
+    rotation: block.rotation || 0,
+    stickers,
+    selectedStickerId: stickers[0]?.id || null
+  };
+};
 
 const formSignature = ({ recordType, projectName, version, pageTitle, blocks }) => JSON.stringify({
   recordType,
   projectName,
   version,
   pageTitle,
-  blocks: blocks.map(({ type, value, language, url, file, x, y, width, rotation }) => ({
+  blocks: blocks.map(({ type, value, language, url, file, x, y, width, rotation, stickers }) => ({
     type,
     value,
     language,
@@ -28,7 +42,8 @@ const formSignature = ({ recordType, projectName, version, pageTitle, blocks }) 
     x,
     y,
     width,
-    rotation
+    rotation,
+    stickers: stickers?.map(({ url, file, x, y, width, rotation }) => ({ url, fileName: file?.name || '', x, y, width, rotation }))
   }))
 });
 
@@ -42,10 +57,26 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
   const [isSaving, setIsSaving] = useState(false);
 
   // Blocks list state - initialized with a Heading block and a Text block
-  const [blocks, setBlocks] = useState(initialData?.blocks?.map(blockFromContent) || [
-    { id: '1', type: 'heading', value: 'NEW SECTION' },
-    { id: '2', type: 'text', value: 'Enter description or notes here...' }
-  ]);
+  const [blocks, setBlocks] = useState(() => {
+    if (!initialData?.blocks) {
+      return [
+        { id: '1', type: 'heading', value: 'NEW SECTION' },
+        { id: '2', type: 'text', value: 'Enter description or notes here...' }
+      ];
+    }
+    const mapped = initialData.blocks.map(blockFromContent);
+    const stickerBlocks = mapped.filter((block) => block.type === 'stickers');
+    if (stickerBlocks.length <= 1) return mapped;
+
+    return [
+      ...mapped.filter((block) => block.type !== 'stickers'),
+      {
+        ...stickerBlocks[0],
+        stickers: stickerBlocks.flatMap((block) => block.stickers),
+        selectedStickerId: stickerBlocks[0].stickers[0]?.id || null
+      }
+    ];
+  });
   const currentSignature = useMemo(
     () => formSignature({ recordType, projectName, version, pageTitle, blocks }),
     [recordType, projectName, version, pageTitle, blocks]
@@ -73,7 +104,9 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
       id: `${Date.now()}${Math.random().toString(36).substr(2, 5)}`,
       type,
       value: defaultVal,
-      language: type === 'code' ? 'javascript' : undefined
+      language: type === 'code' ? 'javascript' : undefined,
+      stickers: type === 'stickers' ? [] : undefined,
+      selectedStickerId: null
     };
     setBlocks((prev) => [...prev, newBlock]);
   };
@@ -104,6 +137,38 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
     setBlocks((prev) =>
       prev.map((b) => (b.id === id ? { ...b, [key]: value } : b))
     );
+  };
+
+  const addStickerFiles = (id, files) => {
+    const nextStickers = Array.from(files || []).map((file) => ({
+      id: `${Date.now()}${Math.random().toString(36).slice(2, 7)}`,
+      file,
+      previewUrl: URL.createObjectURL(file),
+      x: 0,
+      y: 0,
+      width: 180,
+      rotation: 0
+    }));
+    setBlocks((prev) => prev.map((b) => b.id === id ? {
+      ...b,
+      stickers: [...(b.stickers || []), ...nextStickers],
+      selectedStickerId: b.selectedStickerId || nextStickers[0]?.id || null
+    } : b));
+  };
+
+  const updateSelectedSticker = (blockId, patch) => {
+    setBlocks((prev) => prev.map((b) => b.id === blockId ? {
+      ...b,
+      stickers: (b.stickers || []).map((sticker) => sticker.id === b.selectedStickerId ? { ...sticker, ...patch } : sticker)
+    } : b));
+  };
+
+  const deleteSelectedSticker = (blockId) => {
+    setBlocks((prev) => prev.map((b) => {
+      if (b.id !== blockId) return b;
+      const stickers = (b.stickers || []).filter((sticker) => sticker.id !== b.selectedStickerId);
+      return { ...b, stickers, selectedStickerId: stickers[0]?.id || null };
+    }));
   };
 
   // HTML5 Drag Handlers
@@ -149,7 +214,11 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
         alert(`ERROR: BLOCK #${i + 1} NEEDS AN IMAGE FILE.`);
         return;
       }
-      if (!['image', 'sticker', 'demo-input'].includes(blocks[i].type) && !blocks[i].value.trim()) {
+      if (blocks[i].type === 'stickers' && !blocks[i].stickers?.length) {
+        alert(`ERROR: BLOCK #${i + 1} NEEDS AT LEAST ONE STICKER.`);
+        return;
+      }
+      if (!['image', 'sticker', 'stickers', 'demo-input'].includes(blocks[i].type) && !blocks[i].value.trim()) {
         alert(`ERROR: BLOCK #${i + 1} (${blocks[i].type.toUpperCase()}) CANNOT BE EMPTY.`);
         return;
       }
@@ -253,6 +322,7 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
           <div className="block-editor-list">
             {blocks.map((block, index) => {
               const isDragged = draggedIndex === index;
+              const selectedSticker = block.stickers?.find((sticker) => sticker.id === block.selectedStickerId) || block.stickers?.[0];
 
               return (
                 <div
@@ -401,23 +471,42 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
                       </div>
                     )}
 
-                    {block.type === 'sticker' && (
+                    {block.type === 'stickers' && (
                       <div>
-                        <label className="font-mono-tech block text-[9px] uppercase opacity-45 mb-1">STICKER CUTOUT</label>
-                        {block.url && <img src={block.url} alt="" className="mb-2 max-h-32 w-auto" />}
+                        <label className="font-mono-tech block text-[9px] uppercase opacity-45 mb-1">STICKERS</label>
                         <input
                           type="file"
                           accept="image/*"
-                          onChange={(e) => updateBlockFile(block.id, e.target.files[0])}
+                          multiple
+                          onChange={(e) => addStickerFiles(block.id, e.target.files)}
                           className="w-full p-2 bg-transparent font-mono-tech focus:outline-none"
                           style={{ borderBottom: `1px solid ${theme.textColor}`, fontSize: '12px', color: 'inherit' }}
                         />
+                        {!!block.stickers?.length && (
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {block.stickers.map((sticker) => (
+                              <button
+                                key={sticker.id}
+                                type="button"
+                                onClick={() => updateBlockMeta(block.id, 'selectedStickerId', sticker.id)}
+                                className="h-14 w-14 overflow-hidden cursor-pointer"
+                                style={{ border: `2px solid ${sticker.id === selectedSticker?.id ? theme.textColor : theme.borderColor}` }}
+                                aria-label="Select sticker"
+                              >
+                                <img src={sticker.previewUrl || sticker.url} alt="" className="h-full w-full object-cover" />
+                              </button>
+                            ))}
+                          </div>
+                        )}
                         <button
                           type="button"
                           onClick={(e) => {
+                            if (!selectedSticker) return;
                             const rect = e.currentTarget.getBoundingClientRect();
-                            updateBlockMeta(block.id, 'x', Math.round(e.clientX - rect.left));
-                            updateBlockMeta(block.id, 'y', Math.round(e.clientY - rect.top));
+                            updateSelectedSticker(block.id, {
+                              x: Math.round(e.clientX - rect.left),
+                              y: Math.round(e.clientY - rect.top)
+                            });
                           }}
                           className="relative mt-3 w-full min-h-[320px] overflow-hidden text-left cursor-crosshair"
                           style={{
@@ -429,7 +518,7 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
                           <div className="p-6 pointer-events-none">
                             <div className="font-serif font-bold text-3xl mb-4 opacity-80">{pageTitle || 'DOCUMENT TITLE'}</div>
                             <div className="font-mono-tech text-xs leading-6 opacity-60 max-w-xl">
-                              Click anywhere in this preview to place the sticker. The position is saved from that point.
+                              Select a sticker, then click anywhere in this preview to place it.
                             </div>
                             <div className="mt-8 space-y-3 opacity-30">
                               <div className="h-3 w-5/6" style={{ background: theme.textColor }} />
@@ -437,25 +526,23 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
                               <div className="h-3 w-4/6" style={{ background: theme.textColor }} />
                             </div>
                           </div>
-                          {(block.previewUrl || block.url) && (
+                          {block.stickers?.map((sticker) => (
                             <img
-                              src={block.previewUrl || block.url}
+                              key={sticker.id}
+                              src={sticker.previewUrl || sticker.url}
                               alt=""
                               className="absolute pointer-events-none"
                               style={{
-                                left: `${block.x || 0}px`,
-                                top: `${block.y || 0}px`,
-                                width: `${block.width || 180}px`,
-                                transform: `translate(-50%, -50%) rotate(${block.rotation || 0}deg)`,
+                                left: `${sticker.x || 0}px`,
+                                top: `${sticker.y || 0}px`,
+                                width: `${sticker.width || 180}px`,
+                                transform: `translate(-50%, -50%) rotate(${sticker.rotation || 0}deg)`,
+                                outline: sticker.id === selectedSticker?.id ? `1px solid ${theme.textColor}` : 'none',
                               }}
                             />
-                          )}
-                          <span
-                            className="absolute h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full"
-                            style={{ left: `${block.x || 0}px`, top: `${block.y || 0}px`, background: '#ff5f57' }}
-                          />
+                          ))}
                         </button>
-                        <div className="grid grid-cols-[1fr_1fr_auto] gap-3 mt-3 items-end">
+                        <div className="grid grid-cols-[1fr_1fr_auto_auto] gap-3 mt-3 items-end">
                           {[
                             ['width', 'WIDTH', 10, 40, 180],
                             ['rotation', 'ROTATE', 5, -180, 0]
@@ -466,11 +553,11 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
                                 className="mt-1 flex h-10 items-center justify-between"
                                 style={{ border: `1px solid ${theme.borderColor}`, color: 'inherit' }}
                               >
-                                <span className="px-3 text-xs">{block[key] ?? fallback}</span>
+                                <span className="px-3 text-xs">{selectedSticker?.[key] ?? fallback}</span>
                                 <div className="flex h-full">
                                   <button
                                     type="button"
-                                    onClick={() => updateBlockMeta(block.id, key, Math.max(min, Number(block[key] ?? fallback) - step))}
+                                    onClick={() => selectedSticker && updateSelectedSticker(block.id, { [key]: Math.max(min, Number(selectedSticker[key] ?? fallback) - step) })}
                                     className="grid w-9 place-items-center cursor-pointer"
                                     style={{ borderLeft: `1px solid ${theme.borderColor}` }}
                                     aria-label={`Decrease ${label.toLowerCase()}`}
@@ -479,7 +566,7 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
                                   </button>
                                   <button
                                     type="button"
-                                    onClick={() => updateBlockMeta(block.id, key, Number(block[key] ?? fallback) + step)}
+                                    onClick={() => selectedSticker && updateSelectedSticker(block.id, { [key]: Number(selectedSticker[key] ?? fallback) + step })}
                                     className="grid w-9 place-items-center cursor-pointer"
                                     style={{ borderLeft: `1px solid ${theme.borderColor}` }}
                                     aria-label={`Increase ${label.toLowerCase()}`}
@@ -493,16 +580,22 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
                           <button
                             type="button"
                             onClick={() => {
-                              updateBlockMeta(block.id, 'x', 0);
-                              updateBlockMeta(block.id, 'y', 0);
-                              updateBlockMeta(block.id, 'width', 180);
-                              updateBlockMeta(block.id, 'rotation', 0);
+                              updateSelectedSticker(block.id, { x: 0, y: 0, width: 180, rotation: 0 });
                             }}
                             className="grid h-10 w-10 place-items-center cursor-pointer"
                             style={{ border: `1px solid ${theme.borderColor}`, color: 'inherit' }}
                             aria-label="Reset sticker"
                           >
                             <RotateCcw size={16} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => deleteSelectedSticker(block.id)}
+                            className="grid h-10 w-10 place-items-center cursor-pointer"
+                            style={{ border: `1px solid rgba(255,95,87,0.45)`, color: '#ff5f57' }}
+                            aria-label="Delete selected sticker"
+                          >
+                            <Trash2 size={16} />
                           </button>
                         </div>
                       </div>
@@ -587,11 +680,11 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
               </button>
               <button
                 type="button"
-                onClick={() => addBlock('sticker')}
+                onClick={() => addBlock('stickers')}
                 className="px-4 py-2 border font-mono-tech text-xs cursor-pointer hover:bg-[rgba(255,255,255,0.05)] transition-colors flex items-center gap-1.5"
                 style={{ borderColor: theme.textColor, color: theme.textColor, borderRadius: '4px', background: 'transparent' }}
               >
-                <Image className="w-3.5 h-3.5" /> STICKER
+                <Image className="w-3.5 h-3.5" /> STICKERS
               </button>
             </div>
           </div>

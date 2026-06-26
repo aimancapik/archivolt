@@ -228,6 +228,17 @@ export default function App() {
       block.rotation = Number(b.rotation) || 0;
     }
 
+    if (b.type === 'stickers') {
+      block.items = await Promise.all((b.stickers || []).map(async (sticker) => ({
+        id: sticker.id,
+        url: sticker.file ? await uploadImage(sticker.file, folder) : sticker.url,
+        x: Number(sticker.x) || 0,
+        y: Number(sticker.y) || 0,
+        width: Number(sticker.width) || 180,
+        rotation: Number(sticker.rotation) || 0
+      })));
+    }
+
     if (b.type === 'list') {
       block.items = b.value.split('\n').map((item) => item.trim()).filter(Boolean);
     }
@@ -377,6 +388,21 @@ export default function App() {
             }}
           />
         );
+      case 'stickers':
+        return (block.items || []).map((sticker, stickerIndex) => (
+          <img
+            key={`${index}-${sticker.id || stickerIndex}`}
+            src={sticker.url}
+            alt=""
+            className="pointer-events-none absolute z-20"
+            style={{
+              left: `${sticker.x || 0}px`,
+              top: `${sticker.y || 0}px`,
+              width: `${sticker.width || 180}px`,
+              transform: `translate(-50%, -50%) rotate(${sticker.rotation || 0}deg)`,
+            }}
+          />
+        ));
       case 'list':
         return (
           <ul key={index} className="font-mono-tech pl-6 mb-6 space-y-3" style={{ listStyleType: 'square', opacity: 0.85, fontSize: '13px' }}>
