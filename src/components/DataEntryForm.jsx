@@ -242,6 +242,26 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
     }
   };
 
+  const renderPreviewBlock = (previewBlock, previewIndex) => {
+    if (previewBlock.type === 'stickers') return null;
+    if (previewBlock.type === 'heading') {
+      return <h2 key={previewIndex} className="font-serif font-bold mt-10 mb-5 pb-2 inline-block uppercase" style={{ fontSize: '28px', borderBottom: '2px solid currentColor' }}>{previewBlock.value}</h2>;
+    }
+    if (previewBlock.type === 'text') {
+      return <p key={previewIndex} className="font-mono-tech leading-relaxed mb-6 opacity-80" style={{ fontSize: '13px' }}>{previewBlock.value}</p>;
+    }
+    if (previewBlock.type === 'code' || previewBlock.type === 'playground') {
+      return <pre key={previewIndex} className="font-mono-tech mb-6 whitespace-pre-wrap p-4 opacity-85" style={{ border: `1px solid ${theme.borderColor}`, background: 'rgba(0,0,0,0.25)', fontSize: '12px' }}>{previewBlock.value}</pre>;
+    }
+    if (previewBlock.type === 'list') {
+      return <ul key={previewIndex} className="font-mono-tech pl-5 mb-6 space-y-2 opacity-80" style={{ listStyleType: 'square', fontSize: '13px' }}>{previewBlock.value.split('\n').filter(Boolean).map((item, itemIndex) => <li key={itemIndex}>{item}</li>)}</ul>;
+    }
+    if (previewBlock.type === 'image' && (previewBlock.previewUrl || previewBlock.url)) {
+      return <img key={previewIndex} src={previewBlock.previewUrl || previewBlock.url} alt="" className="mb-6 max-h-56 w-full object-cover opacity-80" />;
+    }
+    return null;
+  };
+
   return (
     <div className="animate-fade-in text-inherit">
       <div className="flex items-center justify-between mb-8 pb-4" style={{ borderBottom: `2px solid ${theme.textColor}` }}>
@@ -500,51 +520,48 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
                             ))}
                           </div>
                         )}
-                        <button
-                          type="button"
+                        <div
+                          role="button"
+                          tabIndex={0}
                           onClick={(e) => {
                             if (!selectedSticker) return;
                             const rect = e.currentTarget.getBoundingClientRect();
                             updateSelectedSticker(block.id, {
                               x: Math.round(((e.clientX - rect.left) / rect.width) * 100),
-                              y: Math.round(((e.clientY - rect.top) / rect.height) * 100),
+                              y: Math.round(((e.clientY - rect.top + e.currentTarget.scrollTop) / e.currentTarget.scrollHeight) * 100),
                               placed: true
                             });
                           }}
-                          className="relative mt-3 w-full min-h-[320px] overflow-hidden text-left cursor-crosshair"
+                          onKeyDown={(e) => {
+                            if (e.key !== 'Enter' && e.key !== ' ') return;
+                            e.preventDefault();
+                          }}
+                          className="relative mt-3 h-[520px] w-full overflow-y-auto text-left cursor-crosshair"
                           style={{
                             border: `1px solid ${theme.borderColor}`,
                             background: theme.bgColor,
                             color: theme.textColor,
                           }}
                         >
-                          <div className="p-6 pointer-events-none">
-                            <div className="font-serif font-bold text-3xl mb-4 opacity-80">{pageTitle || 'DOCUMENT TITLE'}</div>
-                            <div className="font-mono-tech text-xs leading-6 opacity-60 max-w-xl">
-                              Select a sticker, then click anywhere in this preview to place it.
-                            </div>
-                            <div className="mt-8 space-y-3 opacity-30">
-                              <div className="h-3 w-5/6" style={{ background: theme.textColor }} />
-                              <div className="h-3 w-3/5" style={{ background: theme.textColor }} />
-                              <div className="h-3 w-4/6" style={{ background: theme.textColor }} />
-                            </div>
+                          <div className="relative min-h-[720px] p-8 pointer-events-none">
+                            {blocks.map(renderPreviewBlock)}
+                            {block.stickers?.filter((sticker) => sticker.placed && sticker.id === selectedSticker?.id).map((sticker) => (
+                              <img
+                                key={sticker.id}
+                                src={sticker.previewUrl || sticker.url}
+                                alt=""
+                                className="absolute pointer-events-none"
+                                style={{
+                                  left: `${sticker.x > 100 ? sticker.x / 8 : sticker.x || 0}%`,
+                                  top: `${sticker.y > 100 ? sticker.y / 6 : sticker.y || 0}%`,
+                                  width: `${sticker.width > 100 ? sticker.width / 8 : sticker.width || 22}%`,
+                                  transform: `translate(-50%, -50%) rotate(${sticker.rotation || 0}deg)`,
+                                  outline: `1px solid ${theme.textColor}`,
+                                }}
+                              />
+                            ))}
                           </div>
-                          {block.stickers?.filter((sticker) => sticker.placed && sticker.id === selectedSticker?.id).map((sticker) => (
-                            <img
-                              key={sticker.id}
-                              src={sticker.previewUrl || sticker.url}
-                              alt=""
-                              className="absolute pointer-events-none"
-                              style={{
-                                left: `${sticker.x > 100 ? sticker.x / 8 : sticker.x || 0}%`,
-                                top: `${sticker.y > 100 ? sticker.y / 6 : sticker.y || 0}%`,
-                                width: `${sticker.width > 100 ? sticker.width / 8 : sticker.width || 22}%`,
-                                transform: `translate(-50%, -50%) rotate(${sticker.rotation || 0}deg)`,
-                                outline: `1px solid ${theme.textColor}`,
-                              }}
-                            />
-                          ))}
-                        </button>
+                        </div>
                         <div className="grid grid-cols-[1fr_1fr_auto_auto] gap-3 mt-3 items-end">
                           {[
                             ['width', 'WIDTH', 2, 5, 22],
