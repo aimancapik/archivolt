@@ -229,13 +229,14 @@ export default function App() {
     }
 
     if (b.type === 'stickers') {
-      block.items = await Promise.all((b.stickers || []).map(async (sticker) => ({
+      block.items = await Promise.all((b.stickers || []).filter((sticker) => sticker.placed).map(async (sticker) => ({
         id: sticker.id,
         url: sticker.file ? await uploadImage(sticker.file, folder) : sticker.url,
         x: Number(sticker.x) || 0,
         y: Number(sticker.y) || 0,
         width: Number(sticker.width) || 22,
-        rotation: Number(sticker.rotation) || 0
+        rotation: Number(sticker.rotation) || 0,
+        placed: true
       })));
     }
 
@@ -389,7 +390,7 @@ export default function App() {
           />
         );
       case 'stickers':
-        return (block.items || []).map((sticker, stickerIndex) => (
+        return (block.items || []).filter((sticker) => sticker.placed ?? true).map((sticker, stickerIndex) => (
           <img
             key={`${index}-${sticker.id || stickerIndex}`}
             src={sticker.url}

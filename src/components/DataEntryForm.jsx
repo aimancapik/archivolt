@@ -8,7 +8,8 @@ const stickerFromContent = (sticker, index) => ({
   x: sticker.x > 100 ? Math.round(sticker.x / 8) : sticker.x || sticker.xPct || 0,
   y: sticker.y > 100 ? Math.round(sticker.y / 6) : sticker.y || sticker.yPct || 0,
   width: sticker.width > 100 ? Math.round(sticker.width / 8) : sticker.width || 22,
-  rotation: sticker.rotation || 0
+  rotation: sticker.rotation || 0,
+  placed: sticker.placed ?? true
 });
 
 const blockFromContent = (block, index) => {
@@ -43,7 +44,7 @@ const formSignature = ({ recordType, projectName, version, pageTitle, blocks }) 
     y,
     width,
     rotation,
-    stickers: stickers?.map(({ url, file, x, y, width, rotation }) => ({ url, fileName: file?.name || '', x, y, width, rotation }))
+    stickers: stickers?.map(({ url, file, x, y, width, rotation, placed }) => ({ url, fileName: file?.name || '', x, y, width, rotation, placed }))
   }))
 });
 
@@ -147,7 +148,8 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
       x: 0,
       y: 0,
       width: 22,
-      rotation: 0
+      rotation: 0,
+      placed: false
     }));
     setBlocks((prev) => prev.map((b) => b.id === id ? {
       ...b,
@@ -214,8 +216,8 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
         alert(`ERROR: BLOCK #${i + 1} NEEDS AN IMAGE FILE.`);
         return;
       }
-      if (blocks[i].type === 'stickers' && !blocks[i].stickers?.length) {
-        alert(`ERROR: BLOCK #${i + 1} NEEDS AT LEAST ONE STICKER.`);
+      if (blocks[i].type === 'stickers' && !blocks[i].stickers?.some((sticker) => sticker.placed)) {
+        alert(`ERROR: BLOCK #${i + 1} NEEDS AT LEAST ONE PLACED STICKER.`);
         return;
       }
       if (!['image', 'sticker', 'stickers', 'demo-input'].includes(blocks[i].type) && !blocks[i].value.trim()) {
@@ -505,7 +507,8 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
                             const rect = e.currentTarget.getBoundingClientRect();
                             updateSelectedSticker(block.id, {
                               x: Math.round(((e.clientX - rect.left) / rect.width) * 100),
-                              y: Math.round(((e.clientY - rect.top) / rect.height) * 100)
+                              y: Math.round(((e.clientY - rect.top) / rect.height) * 100),
+                              placed: true
                             });
                           }}
                           className="relative mt-3 w-full min-h-[320px] overflow-hidden text-left cursor-crosshair"
@@ -526,7 +529,7 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
                               <div className="h-3 w-4/6" style={{ background: theme.textColor }} />
                             </div>
                           </div>
-                          {block.stickers?.map((sticker) => (
+                          {block.stickers?.filter((sticker) => sticker.placed).map((sticker) => (
                             <img
                               key={sticker.id}
                               src={sticker.previewUrl || sticker.url}
