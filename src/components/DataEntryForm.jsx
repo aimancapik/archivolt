@@ -174,6 +174,14 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
     }));
   };
 
+  const deleteSticker = (blockId, stickerId) => {
+    setBlocks((prev) => prev.map((b) => {
+      if (b.id !== blockId) return b;
+      const stickers = (b.stickers || []).filter((sticker) => sticker.id !== stickerId);
+      return { ...b, stickers, selectedStickerId: b.selectedStickerId === stickerId ? stickers[0]?.id || null : b.selectedStickerId };
+    }));
+  };
+
   // HTML5 Drag Handlers
   const handleDragStart = (index) => {
     setDraggedIndex(index);
@@ -520,16 +528,29 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
                         {!!block.stickers?.length && (
                           <div className="mt-3 flex flex-wrap gap-2">
                             {block.stickers.map((sticker) => (
-                              <button
+                              <div
                                 key={sticker.id}
-                                type="button"
-                                onClick={() => updateBlockMeta(block.id, 'selectedStickerId', sticker.id)}
-                                className="h-14 w-14 overflow-hidden cursor-pointer"
+                                className="relative h-14 w-14"
                                 style={{ border: `2px solid ${sticker.id === selectedSticker?.id ? theme.textColor : theme.borderColor}` }}
-                                aria-label="Select sticker"
                               >
-                                <img src={sticker.previewUrl || sticker.url} alt="" className="h-full w-full object-cover" />
-                              </button>
+                                <button
+                                  type="button"
+                                  onClick={() => updateBlockMeta(block.id, 'selectedStickerId', sticker.id)}
+                                  className="h-full w-full overflow-hidden cursor-pointer"
+                                  aria-label="Select sticker"
+                                >
+                                  <img src={sticker.previewUrl || sticker.url} alt="" className="h-full w-full object-cover" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => deleteSticker(block.id, sticker.id)}
+                                  className="absolute -right-2 -top-2 grid h-5 w-5 place-items-center border cursor-pointer"
+                                  style={{ borderColor: '#ff5f57', background: '#0a0a0b', color: '#ff5f57' }}
+                                  aria-label="Delete sticker"
+                                >
+                                  <X size={12} />
+                                </button>
+                              </div>
                             ))}
                           </div>
                         )}
