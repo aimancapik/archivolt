@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { X, GripVertical, Trash2, Save, Plus, Image, ChevronUp, ChevronDown, RotateCcw } from 'lucide-react';
+import { X, GripVertical, Trash2, Save, Plus, Image, ChevronUp, ChevronDown, RotateCcw, Upload } from 'lucide-react';
 import { cn } from '../utils/helpers';
 
 const stickerFromContent = (sticker, index) => ({
@@ -495,15 +495,27 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
 
                     {block.type === 'stickers' && (
                       <div>
-                        <label className="font-mono-tech block text-[9px] uppercase opacity-45 mb-1">STICKERS</label>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          multiple
-                          onChange={(e) => addStickerFiles(block.id, e.target.files)}
-                          className="w-full p-2 bg-transparent font-mono-tech focus:outline-none"
-                          style={{ borderBottom: `1px solid ${theme.textColor}`, fontSize: '12px', color: 'inherit' }}
-                        />
+                        <label className="font-mono-tech block text-[9px] uppercase opacity-45 mb-2">STICKERS</label>
+                        <div className="flex flex-wrap items-center gap-3">
+                          <input
+                            id={`sticker-upload-${block.id}`}
+                            type="file"
+                            accept="image/*"
+                            multiple
+                            onChange={(e) => addStickerFiles(block.id, e.target.files)}
+                            className="sr-only"
+                          />
+                          <label
+                            htmlFor={`sticker-upload-${block.id}`}
+                            className="inline-flex h-10 items-center gap-2 px-3 border font-mono-tech text-[10px] uppercase cursor-pointer transition-colors hover:bg-[rgba(255,255,255,0.06)]"
+                            style={{ borderColor: theme.textColor, color: theme.textColor }}
+                          >
+                            <Upload size={14} /> Add Stickers
+                          </label>
+                          <span className="font-mono-tech text-[10px] uppercase opacity-55">
+                            {block.stickers?.length ? `${block.stickers.length} loaded` : 'No stickers yet'}
+                          </span>
+                        </div>
                         {!!block.stickers?.length && (
                           <div className="mt-3 flex flex-wrap gap-2">
                             {block.stickers.map((sticker) => (
