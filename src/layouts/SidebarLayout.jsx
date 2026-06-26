@@ -160,14 +160,25 @@ export const SidebarLayout = ({
               {!isAddingData && (
                 <>
                   <button
-                    onClick={() => { setIsEditingData(true); setIsAddingData(false); setHasDirtyEdit(false); }}
+                    onClick={() => {
+                      if (isEditingData) {
+                        if (!confirmDiscardEdit()) return;
+                        leaveEditor();
+                        return;
+                      }
+                      setIsEditingData(true);
+                      setIsAddingData(false);
+                      setHasDirtyEdit(false);
+                      setShowProjectSettings(false);
+                    }}
                     className="p-2 border-2 transition-colors cursor-pointer"
                     style={{
                       borderColor: activeTheme.textColor,
                       backgroundColor: isEditingData ? activeTheme.textColor : 'transparent',
                       color: isEditingData ? activeTheme.bgColor : activeTheme.textColor,
                     }}
-                    title="Edit Document"
+                    title={isEditingData ? 'View Document' : 'Edit Document'}
+                    aria-pressed={isEditingData}
                   >
                     <Edit3 className="w-5 h-5" />
                   </button>
