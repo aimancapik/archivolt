@@ -298,7 +298,7 @@ export default function App() {
       alert('ERROR: PROJECT NEEDS AT LEAST ONE DOCUMENT.');
       return;
     }
-    if (!confirm(`Delete document "${currentPageData.title}"?`)) return;
+    if (!confirm(`Are you sure you want to delete this document: "${currentPageData.title}"?`)) return;
 
     const nextPage = nextPageKey || prevPageKey;
     setProjects((prev) => {
@@ -321,7 +321,8 @@ export default function App() {
       alert('ERROR: ARCHIVE NEEDS AT LEAST ONE PROJECT.');
       return;
     }
-    if (!confirm(`Delete project "${activeProject.name}" and all documents?`)) return;
+    const typedName = prompt(`Type "${activeProject.name}" to delete this project and all documents.`);
+    if (typedName !== activeProject.name) return;
 
     const nextProjectId = projectIds.find((id) => id !== activeProjectId);
     setProjects((prev) => {
