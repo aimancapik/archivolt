@@ -121,10 +121,11 @@ export const SidebarLayout = ({
                   value={activeProjectId}
                   onChange={(e) => {
                     if (!confirmDiscardEdit()) return;
-                    setActiveProjectId(e.target.value);
-                    setActivePage(Object.keys(projects[e.target.value].docs)[0]);
-                    leaveEditor();
-                  }}
+                  setActiveProjectId(e.target.value);
+                  setActivePage(Object.keys(projects[e.target.value].docs)[0]);
+                  leaveEditor();
+                  setShowProjectSettings(false);
+                }}
                   className="appearance-none bg-transparent font-serif font-bold text-xl md:text-3xl tracking-tighter uppercase focus:outline-none cursor-pointer border-none pr-8"
                   style={{ color: activeTheme.textColor }}
                 >
