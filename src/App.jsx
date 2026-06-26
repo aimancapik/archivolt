@@ -179,6 +179,7 @@ export default function App() {
   const initialProjectsRef = React.useRef(projects);
 
   const activeProject = projects[activeProjectId];
+  const hasProjects = Object.keys(projects).length > 0;
 
   const pageKeys = activeProject ? Object.keys(activeProject.docs) : [];
   const currentIndex = pageKeys.indexOf(activePage);
@@ -368,29 +369,52 @@ export default function App() {
 
   return (
     <div className="h-screen w-screen relative vignette grain" style={{ background: '#0a0a0b', overflow: 'hidden' }}>
-      <SidebarLayout
-        projects={projects}
-        activeProjectId={activeProjectId}
-        setActiveProjectId={setActiveProjectId}
-        activePage={activePage}
-        setActivePage={setActivePage}
-        isAddingData={isAddingData}
-        setIsAddingData={setIsAddingData}
-        isEditingData={isEditingData}
-        setIsEditingData={setIsEditingData}
-        activeProject={activeProject}
-        pageKeys={pageKeys}
-        prevPageKey={prevPageKey}
-        nextPageKey={nextPageKey}
-        activeTheme={activeTheme}
-        PALETTE={PALETTE}
-        currentPageData={currentPageData}
-        handleSaveNewData={handleSaveNewData}
-        handleUpdateDocument={handleUpdateDocument}
-        handleDeleteDocument={handleDeleteDocument}
-        handleDeleteProject={handleDeleteProject}
-        renderContent={renderContent}
-      />
+      {hasProjects && activeProject ? (
+        <SidebarLayout
+          projects={projects}
+          activeProjectId={activeProjectId}
+          setActiveProjectId={setActiveProjectId}
+          activePage={activePage}
+          setActivePage={setActivePage}
+          isAddingData={isAddingData}
+          setIsAddingData={setIsAddingData}
+          isEditingData={isEditingData}
+          setIsEditingData={setIsEditingData}
+          activeProject={activeProject}
+          pageKeys={pageKeys}
+          prevPageKey={prevPageKey}
+          nextPageKey={nextPageKey}
+          activeTheme={activeTheme}
+          PALETTE={PALETTE}
+          currentPageData={currentPageData}
+          handleSaveNewData={handleSaveNewData}
+          handleUpdateDocument={handleUpdateDocument}
+          handleDeleteDocument={handleDeleteDocument}
+          handleDeleteProject={handleDeleteProject}
+          renderContent={renderContent}
+        />
+      ) : (
+        <div className="h-full w-full flex items-center justify-center px-6" style={{ color: '#e4decd', zIndex: 10 }}>
+          <div className="max-w-md w-full border p-8 text-center" style={{ borderColor: 'rgba(228,222,205,0.2)', background: '#0d0d0e' }}>
+            <h1 className="font-serif font-bold text-4xl mb-3">EMPTY ARCHIVE</h1>
+            <p className="font-mono-tech text-xs uppercase mb-6" style={{ opacity: 0.65 }}>
+              No projects found.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setProjects(initialProjectsData);
+                setActiveProjectId('nexus-ui');
+                setActivePage('getting_started');
+              }}
+              className="px-5 py-3 border font-mono-tech text-xs uppercase cursor-pointer"
+              style={{ borderColor: '#e4decd', color: '#e4decd' }}
+            >
+              Restore Starter Archive
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
