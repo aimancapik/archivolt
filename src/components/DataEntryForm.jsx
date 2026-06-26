@@ -1,16 +1,21 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { X, GripVertical, Trash2, Save, Plus, Image, ChevronUp, ChevronDown, RotateCcw, Upload } from 'lucide-react';
+import { CodeBlock } from './CodeBlock';
+import { InteractiveInputDemo } from './InteractiveInputDemo';
+import { LiveRunner } from './LiveRunner';
 import { cn } from '../utils/helpers';
+import { normalizeSticker, pointerToStickerPoint, stickerPlacementStyle } from '../utils/stickerPlacement';
 
-const stickerFromContent = (sticker, index) => ({
-  id: sticker.id || `${Date.now()}-sticker-${index}`,
-  url: sticker.url,
-  x: sticker.x > 100 ? Math.round(sticker.x / 8) : sticker.x || sticker.xPct || 0,
-  y: sticker.y > 100 ? Math.round(sticker.y / 6) : sticker.y || sticker.yPct || 0,
-  width: sticker.width > 100 ? Math.round(sticker.width / 8) : sticker.width || 22,
-  rotation: sticker.rotation || 0,
-  placed: sticker.placed ?? true
-});
+const stickerFromContent = (sticker, index) => {
+  const normalized = normalizeSticker(sticker);
+
+  return {
+    id: sticker.id || `${Date.now()}-sticker-${index}`,
+    url: sticker.url,
+    ...normalized,
+    placed: sticker.placed ?? true
+  };
+};
 
 const blockFromContent = (block, index) => {
   const stickers = block.type === 'stickers' ? (block.items || []).map(stickerFromContent) : block.type === 'sticker' ? [stickerFromContent(block, 0)] : [];
@@ -146,8 +151,8 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
       id: `${Date.now()}${Math.random().toString(36).slice(2, 7)}`,
       file,
       previewUrl: URL.createObjectURL(file),
-      x: 0,
-      y: 0,
+      x: 50,
+      y: 50,
       width: 22,
       rotation: 0,
       placed: false
@@ -180,6 +185,13 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
       const stickers = (b.stickers || []).filter((sticker) => sticker.id !== stickerId);
       return { ...b, stickers, selectedStickerId: b.selectedStickerId === stickerId ? stickers[0]?.id || null : b.selectedStickerId };
     }));
+  };
+
+  const placeSelectedSticker = (blockId, target, clientX, clientY) => {
+    updateSelectedSticker(blockId, {
+      ...pointerToStickerPoint(clientX, clientY, target.getBoundingClientRect()),
+      placed: true
+    });
   };
 
   // HTML5 Drag Handlers
@@ -254,19 +266,30 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
   const renderPreviewBlock = (previewBlock, previewIndex) => {
     if (previewBlock.type === 'stickers') return null;
     if (previewBlock.type === 'heading') {
-      return <h2 key={previewIndex} className="font-serif font-bold mt-10 mb-5 pb-2 inline-block uppercase" style={{ fontSize: '28px', borderBottom: '2px solid currentColor' }}>{previewBlock.value}</h2>;
+      return <h2 key={previewIndex} className="font-serif font-bold mt-14 mb-6 pb-2 inline-block" style={{ fontSize: 'clamp(1.5rem, 3vw, 2.2rem)', borderBottom: '2px solid currentColor' }}>{previewBlock.value}</h2>;
     }
     if (previewBlock.type === 'text') {
-      return <p key={previewIndex} className="font-mono-tech leading-relaxed mb-6 opacity-80" style={{ fontSize: '13px' }}>{previewBlock.value}</p>;
+      return <p key={previewIndex} className="font-mono-tech leading-relaxed mb-6" style={{ fontSize: '14px', opacity: 0.85 }}>{previewBlock.value}</p>;
     }
-    if (previewBlock.type === 'code' || previewBlock.type === 'playground') {
-      return <pre key={previewIndex} className="font-mono-tech mb-6 whitespace-pre-wrap p-4 opacity-85" style={{ border: `1px solid ${theme.borderColor}`, background: 'rgba(0,0,0,0.25)', fontSize: '12px' }}>{previewBlock.value}</pre>;
+    if (previewBlock.type === 'code') {
+      return <CodeBlock key={previewIndex} language={previewBlock.language} code={previewBlock.value} />;
+    }
+    if (previewBlock.type === 'demo-input') {
+      return <InteractiveInputDemo key={previewIndex} />;
+    }
+    if (previewBlock.type === 'playground') {
+      return <LiveRunner key={`${previewIndex}-${previewBlock.value}`} defaultCode={previewBlock.value} />;
     }
     if (previewBlock.type === 'list') {
-      return <ul key={previewIndex} className="font-mono-tech pl-5 mb-6 space-y-2 opacity-80" style={{ listStyleType: 'square', fontSize: '13px' }}>{previewBlock.value.split('\n').filter(Boolean).map((item, itemIndex) => <li key={itemIndex}>{item}</li>)}</ul>;
+      return <ul key={previewIndex} className="font-mono-tech pl-6 mb-6 space-y-3" style={{ listStyleType: 'square', opacity: 0.85, fontSize: '13px' }}>{previewBlock.value.split('\n').filter(Boolean).map((item, itemIndex) => <li key={itemIndex}>{item}</li>)}</ul>;
     }
     if (previewBlock.type === 'image' && (previewBlock.previewUrl || previewBlock.url)) {
-      return <img key={previewIndex} src={previewBlock.previewUrl || previewBlock.url} alt="" className="mb-6 max-h-56 w-full object-cover opacity-80" />;
+      return (
+        <figure key={previewIndex} className="my-10 p-2" style={{ border: '1px solid rgba(255,255,255,0.1)', background: '#0d0d0e' }}>
+          <img src={previewBlock.previewUrl || previewBlock.url} alt="Reference" className="w-full h-auto" style={{ filter: 'grayscale(0.8) contrast(1.15) brightness(0.85)' }} />
+          {previewBlock.value && <figcaption className="font-mono-tech uppercase mt-2" style={{ fontSize: '9px', color: '#888' }}>{previewBlock.value}</figcaption>}
+        </figure>
+      );
     }
     return null;
   };
@@ -544,9 +567,9 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
                                 <button
                                   type="button"
                                   onClick={() => deleteSticker(block.id, sticker.id)}
-                                  className="absolute -right-2 -top-2 grid h-5 w-5 place-items-center border cursor-pointer"
-                                  style={{ borderColor: '#ff5f57', background: '#0a0a0b', color: '#ff5f57' }}
-                                  aria-label="Delete sticker"
+                                  className="absolute -right-2 -top-2 grid h-5 w-5 place-items-center border cursor-pointer opacity-75 transition-opacity hover:opacity-100"
+                                  style={{ borderColor: theme.borderColor, background: theme.bgColor, color: theme.textColor }}
+                                  aria-label="Remove sticker"
                                 >
                                   <X size={12} />
                                 </button>
@@ -555,7 +578,7 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
                           </div>
                         )}
                         <div
-                          className="relative mt-3 h-[520px] w-full overflow-y-auto text-left cursor-crosshair"
+                          className="relative mt-3 h-[520px] w-full overflow-y-auto text-left cursor-crosshair p-6 md:p-12 lg:p-20"
                           style={{
                             border: `1px solid ${theme.borderColor}`,
                             background: theme.bgColor,
@@ -565,27 +588,31 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
                           <div
                             role="button"
                             tabIndex={0}
-                            onClick={(e) => {
+                            onPointerDown={(e) => {
                               if (!selectedSticker) return;
-                              const rect = e.currentTarget.getBoundingClientRect();
-                              updateSelectedSticker(block.id, {
-                                x: Number((((e.clientX - rect.left) / rect.width) * 100).toFixed(2)),
-                                y: Number((((e.clientY - rect.top) / rect.height) * 100).toFixed(2)),
-                                placed: true
-                              });
+                              e.currentTarget.setPointerCapture(e.pointerId);
+                              placeSelectedSticker(block.id, e.currentTarget, e.clientX, e.clientY);
+                            }}
+                            onPointerMove={(e) => {
+                              if (!selectedSticker || !e.currentTarget.hasPointerCapture(e.pointerId)) return;
+                              placeSelectedSticker(block.id, e.currentTarget, e.clientX, e.clientY);
                             }}
                             onKeyDown={(e) => {
                               if (e.key !== 'Enter' && e.key !== ' ') return;
                               e.preventDefault();
+                              if (selectedSticker) updateSelectedSticker(block.id, { x: 50, y: 50, placed: true });
                             }}
-                            className="relative min-h-[720px]"
+                            className="relative min-h-[720px] select-none"
+                            aria-label="Place selected sticker"
                           >
                             {!selectedSticker && (
                               <div className="absolute right-6 top-6 font-mono-tech text-[10px] uppercase opacity-50">
                                 Select a sticker thumbnail first
                               </div>
                             )}
-                            {blocks.map(renderPreviewBlock)}
+                            <div className="pointer-events-none">
+                              {blocks.map(renderPreviewBlock)}
+                            </div>
                             {block.stickers?.filter((sticker) => sticker.placed).map((sticker) => (
                               <img
                                 key={sticker.id}
@@ -593,10 +620,7 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
                                 alt=""
                                 className="absolute pointer-events-none"
                                 style={{
-                                  left: `${sticker.x > 100 ? sticker.x / 8 : sticker.x || 0}%`,
-                                  top: `${sticker.y > 100 ? sticker.y / 6 : sticker.y || 0}%`,
-                                  width: `${sticker.width > 100 ? sticker.width / 8 : sticker.width || 22}%`,
-                                  transform: `translate(-50%, -50%) rotate(${sticker.rotation || 0}deg)`,
+                                  ...stickerPlacementStyle(sticker),
                                   outline: sticker.id === selectedSticker?.id ? `1px solid ${theme.textColor}` : 'none',
                                 }}
                               />
@@ -605,9 +629,9 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
                         </div>
                         <div className="grid grid-cols-[1fr_1fr_auto_auto] gap-3 mt-3 items-end">
                           {[
-                            ['width', 'WIDTH', 2, 5, 22],
-                            ['rotation', 'ROTATE', 5, -180, 0]
-                          ].map(([key, label, step, min, fallback]) => (
+                            ['width', 'WIDTH', 2, 5, 100, 22],
+                            ['rotation', 'ROTATE', 5, -180, 180, 0]
+                          ].map(([key, label, step, min, max, fallback]) => (
                             <div key={key} className="font-mono-tech text-[9px] uppercase opacity-70">
                               {label}
                               <div
@@ -627,7 +651,7 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
                                   </button>
                                   <button
                                     type="button"
-                                    onClick={() => selectedSticker && updateSelectedSticker(block.id, { [key]: Number(selectedSticker[key] ?? fallback) + step })}
+                                    onClick={() => selectedSticker && updateSelectedSticker(block.id, { [key]: Math.min(max, Number(selectedSticker[key] ?? fallback) + step) })}
                                     className="grid w-9 place-items-center cursor-pointer"
                                     style={{ borderLeft: `1px solid ${theme.borderColor}` }}
                                     aria-label={`Increase ${label.toLowerCase()}`}
@@ -641,7 +665,7 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
                           <button
                             type="button"
                             onClick={() => {
-                              updateSelectedSticker(block.id, { x: 0, y: 0, width: 22, rotation: 0 });
+                              updateSelectedSticker(block.id, { x: 50, y: 50, width: 22, rotation: 0, placed: true });
                             }}
                             className="grid h-10 w-10 place-items-center cursor-pointer"
                             style={{ border: `1px solid ${theme.borderColor}`, color: 'inherit' }}
@@ -652,11 +676,12 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
                           <button
                             type="button"
                             onClick={() => deleteSelectedSticker(block.id)}
-                            className="grid h-10 w-10 place-items-center cursor-pointer"
-                            style={{ border: `1px solid rgba(255,95,87,0.45)`, color: '#ff5f57' }}
-                            aria-label="Delete selected sticker"
+                            disabled={!selectedSticker}
+                            className="grid h-10 w-10 place-items-center cursor-pointer transition-opacity disabled:cursor-not-allowed"
+                            style={{ border: `1px solid ${theme.borderColor}`, color: theme.textColor, opacity: selectedSticker ? 0.75 : 0.35 }}
+                            aria-label="Remove selected sticker"
                           >
-                            <Trash2 size={16} />
+                            <X size={16} />
                           </button>
                         </div>
                       </div>
