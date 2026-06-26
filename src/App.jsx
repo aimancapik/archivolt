@@ -43,6 +43,18 @@ const PALETTE = [
   },
 ];
 
+const DOC_THEMES = {
+  current: null,
+  'retro-computer': {
+    bgColor: '#c7b7ff',
+    textColor: '#5b2d1f',
+    accentColor: '#ff6b35',
+    borderColor: 'rgba(91,45,31,0.35)',
+    gradient: 'linear-gradient(180deg, #d6c9ff 0%, #c7b7ff 50%, #f5b6c6 100%)',
+    pattern: 'grid',
+  },
+};
+
 // --- MOCK DOCUMENTATION DATA ---
 const initialProjectsData = {
   'nexus-ui': {
@@ -188,8 +200,9 @@ export default function App() {
   const currentIndex = pageKeys.indexOf(activePage);
   const prevPageKey = currentIndex > 0 ? pageKeys[currentIndex - 1] : null;
   const nextPageKey = currentIndex < pageKeys.length - 1 ? pageKeys[currentIndex + 1] : null;
-  const activeTheme = PALETTE[currentIndex >= 0 ? currentIndex % PALETTE.length : 0];
   const currentPageData = activeProject?.docs[activePage] || (activeProject ? Object.values(activeProject.docs)[0] : null);
+  const getDocTheme = (doc, index) => DOC_THEMES[doc?.theme] || PALETTE[index >= 0 ? index % PALETTE.length : 0];
+  const activeTheme = getDocTheme(currentPageData, currentIndex);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
@@ -257,6 +270,7 @@ export default function App() {
         docs[newPageId] = {
           title: formData.pageTitle.toUpperCase(),
           subtitle: formData.version.toUpperCase(),
+          theme: formData.theme,
           content
         };
         project.docs = docs;
@@ -280,6 +294,7 @@ export default function App() {
             index: {
               title: formData.pageTitle.toUpperCase(), 
               subtitle: "CODE_000 // INIT",
+              theme: formData.theme,
               content
             }
           }
@@ -305,6 +320,7 @@ export default function App() {
           ...project.docs[activePage],
           title: formData.pageTitle.toUpperCase(),
           subtitle: formData.version.toUpperCase(),
+          theme: formData.theme,
           content
         }
       };
@@ -411,7 +427,7 @@ export default function App() {
           prevPageKey={prevPageKey}
           nextPageKey={nextPageKey}
           activeTheme={activeTheme}
-          PALETTE={PALETTE}
+          getDocTheme={getDocTheme}
           scrollToTop={scrollToTop}
           handleSaveNewData={handleSaveNewData}
           handleUpdateDocument={handleUpdateDocument}
@@ -438,7 +454,7 @@ export default function App() {
           prevPageKey={prevPageKey}
           nextPageKey={nextPageKey}
           activeTheme={activeTheme}
-          PALETTE={PALETTE}
+          getDocTheme={getDocTheme}
           scrollToTop={scrollToTop}
           currentPageData={currentPageData}
           handleSaveNewData={handleSaveNewData}

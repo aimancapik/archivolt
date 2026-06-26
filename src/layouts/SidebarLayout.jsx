@@ -19,7 +19,7 @@ export const SidebarLayout = ({
   prevPageKey,
   nextPageKey,
   activeTheme,
-  PALETTE,
+  getDocTheme,
   scrollToTop,
   currentPageData,
   handleSaveNewData,
@@ -43,8 +43,8 @@ export const SidebarLayout = ({
         <div className="flex flex-col z-10 w-24 md:w-32 shrink-0 -mr-[2px] overflow-y-auto scrollbar-none" style={{ maxHeight: '100%' }}>
           {pageKeys.map((key, index) => {
             const isActive = activePage === key;
-            const theme = PALETTE[index % PALETTE.length];
             const doc = activeProject.docs[key];
+            const theme = getDocTheme(doc, index);
             
             return (
               <button
@@ -191,7 +191,8 @@ export const SidebarLayout = ({
                   recordType: 'document',
                   pageTitle: currentPageData.title,
                   version: currentPageData.subtitle,
-                  blocks: currentPageData.content
+                  blocks: currentPageData.content,
+                  theme: currentPageData.theme || 'current'
                 } : null}
               />
             ) : (

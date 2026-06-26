@@ -23,7 +23,7 @@ export const CabinetLayout = ({
   prevPageKey,
   nextPageKey,
   activeTheme,
-  PALETTE,
+  getDocTheme,
   scrollToTop,
   handleSaveNewData,
   handleUpdateDocument,
@@ -158,7 +158,8 @@ export const CabinetLayout = ({
                   recordType: 'document',
                   pageTitle: currentPageData.title,
                   version: currentPageData.subtitle,
-                  blocks: currentPageData.content
+                  blocks: currentPageData.content,
+                  theme: currentPageData.theme || 'current'
                 } : null}
               />
             </div>
@@ -167,8 +168,8 @@ export const CabinetLayout = ({
           <div className={cn("archive-cabinet", isExpanded ? "archive-cabinet-expanded" : "")}>
             {pageKeys.map((key, index) => {
               const isActive = activePage === key;
-              const theme = PALETTE[index % PALETTE.length];
               const doc = activeProject.docs[key];
+              const theme = getDocTheme(doc, index);
 
               return (
                 <div

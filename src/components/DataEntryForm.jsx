@@ -17,6 +17,7 @@ export const DataEntryForm = ({ onSave, onCancel, activeColorTheme: theme, activ
   const [projectName, setProjectName] = useState('');
   const [version, setVersion] = useState(initialData?.version || 'CODE_009 // TEST');
   const [pageTitle, setPageTitle] = useState(initialData?.pageTitle || 'NEW REC');
+  const [selectedTheme, setSelectedTheme] = useState(initialData?.theme || 'current');
   const [isSaving, setIsSaving] = useState(false);
 
   // Blocks list state - initialized with a Heading block and a Text block
@@ -125,6 +126,7 @@ export const DataEntryForm = ({ onSave, onCancel, activeColorTheme: theme, activ
         projectName,
         version,
         pageTitle,
+        theme: selectedTheme,
         blocks
       });
     } catch (error) {
@@ -199,6 +201,19 @@ export const DataEntryForm = ({ onSave, onCancel, activeColorTheme: theme, activ
               className="w-full p-3 bg-transparent font-mono-tech focus:outline-none uppercase"
               style={{ border: `1px solid ${theme.textColor}`, fontSize: '13px', color: 'inherit' }} />
           </div>
+        </div>
+
+        <div className="space-y-2">
+          <label className="font-mono-tech uppercase font-bold block" style={{ fontSize: '9px', letterSpacing: '0.12em' }}>THEME_STYLE</label>
+          <select
+            value={selectedTheme}
+            onChange={(e) => setSelectedTheme(e.target.value)}
+            className="w-full p-3 bg-transparent font-mono-tech focus:outline-none uppercase"
+            style={{ border: `1px solid ${theme.textColor}`, fontSize: '13px', color: 'inherit' }}
+          >
+            <option value="current" style={{ color: '#1a1b1c', background: '#e4decd' }}>Current</option>
+            <option value="retro-computer" style={{ color: '#1a1b1c', background: '#e4decd' }}>Retro Computer</option>
+          </select>
         </div>
 
         <div className="space-y-2">

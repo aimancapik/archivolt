@@ -280,6 +280,11 @@ body { margin: 0; overflow: hidden; background: #0a0a0b; }
   background-size: 8px 8px;
   opacity: 0.1;
 }
+.pattern-grid {
+  background-image: linear-gradient(currentColor 1px, transparent 1px), linear-gradient(90deg, currentColor 1px, transparent 1px);
+  background-size: 32px 32px;
+  opacity: 0.18;
+}
 
 /* === BARCODE === */
 .barcode {
