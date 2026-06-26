@@ -4,7 +4,7 @@ import { InteractiveInputDemo } from './components/InteractiveInputDemo';
 import { LiveRunner } from './components/LiveRunner';
 import { SidebarLayout } from './layouts/SidebarLayout';
 import { isSupabaseConfigured } from './lib/supabase';
-import { loadRemoteProjects, removeImageBackground, saveRemoteProjects, uploadImage } from './lib/archiveStore';
+import { loadRemoteProjects, saveRemoteProjects, uploadImage } from './lib/archiveStore';
 
 const STORAGE_KEY = 'archivolt.projects';
 
@@ -221,8 +221,7 @@ export default function App() {
     }
 
     if (b.type === 'sticker') {
-      const stickerFile = b.file ? await removeImageBackground(b.file) : null;
-      block.url = stickerFile ? await uploadImage(stickerFile, folder) : b.url;
+      block.url = b.file ? await uploadImage(b.file, folder) : b.url;
       block.x = Number(b.x) || 0;
       block.y = Number(b.y) || 0;
       block.width = Number(b.width) || 180;

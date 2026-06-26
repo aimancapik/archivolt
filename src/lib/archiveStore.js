@@ -46,13 +46,3 @@ export const uploadImage = async (file, folder = 'uploads') => {
   const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
   return data.publicUrl;
 };
-
-export const removeImageBackground = async (file) => {
-  const { removeBackground } = await import('@imgly/background-removal');
-  const blob = await removeBackground(file, {
-    model: 'isnet_quint8',
-    output: { format: 'image/png', quality: 0.8 }
-  });
-
-  return new File([blob], `${file.name.replace(/\.[^.]+$/, '') || 'sticker'}-sticker.png`, { type: 'image/png' });
-};
