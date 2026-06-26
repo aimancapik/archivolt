@@ -1,8 +1,7 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { CodeBlock } from './components/CodeBlock';
 import { InteractiveInputDemo } from './components/InteractiveInputDemo';
 import { LiveRunner } from './components/LiveRunner';
-import { CabinetLayout } from './layouts/CabinetLayout';
 import { SidebarLayout } from './layouts/SidebarLayout';
 import { isSupabaseConfigured } from './lib/supabase';
 import { loadRemoteProjects, saveRemoteProjects, uploadImage } from './lib/archiveStore';
@@ -177,10 +176,7 @@ export default function App() {
   const [activePage, setActivePage] = useState('getting_started');
   const [isAddingData, setIsAddingData] = useState(false);
   const [isEditingData, setIsEditingData] = useState(false);
-  const [isExpanded, setIsExpanded] = useState(false);
-  const [viewMode, setViewMode] = useState('cabinet');
-  const contentRef = useRef(null);
-  const initialProjectsRef = useRef(projects);
+  const initialProjectsRef = React.useRef(projects);
 
   const activeProject = projects[activeProjectId];
 
@@ -209,22 +205,6 @@ export default function App() {
       .catch((error) => console.warn('Supabase load failed:', error.message))
       .finally(() => setRemoteReady(true));
   }, []);
-
-  const scrollToTop = () => {
-    if (contentRef.current) contentRef.current.scrollTo(0, 0);
-  };
-
-  useEffect(() => {
-    if (viewMode !== 'sidebar') return;
-
-    const activeFolder = document.querySelector('.archive-folder-active');
-    if (activeFolder) {
-      const timer = setTimeout(() => {
-        activeFolder.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
-      }, 120);
-      return () => clearTimeout(timer);
-    }
-  }, [activePage, activeProjectId, viewMode]);
 
   const buildContentBlocks = async (formData, folder) => Promise.all(formData.blocks.map(async (b) => {
     const block = {
@@ -266,7 +246,6 @@ export default function App() {
       setActivePage(newPageId);
       setIsAddingData(false);
       setIsEditingData(false);
-      setIsExpanded(false);
     } else {
       const newId = formData.projectName.toLowerCase().replace(/\s+/g, '-');
       const content = await buildContentBlocks(formData, `${newId}/index`);
@@ -290,7 +269,6 @@ export default function App() {
       setActivePage('index');
       setIsAddingData(false);
       setIsEditingData(false);
-      setIsExpanded(false);
     }
   };
 
@@ -389,88 +367,29 @@ export default function App() {
 
   return (
     <div className="h-screen w-screen relative vignette grain" style={{ background: '#0a0a0b', overflow: 'hidden' }}>
-      
-      {viewMode === 'cabinet' ? (
-        <CabinetLayout
-          projects={projects}
-          activeProjectId={activeProjectId}
-          setActiveProjectId={setActiveProjectId}
-          activePage={activePage}
-          setActivePage={setActivePage}
-          isAddingData={isAddingData}
-          setIsAddingData={setIsAddingData}
-          isEditingData={isEditingData}
-          setIsEditingData={setIsEditingData}
-          isExpanded={isExpanded}
-          setIsExpanded={setIsExpanded}
-          viewMode={viewMode}
-          setViewMode={setViewMode}
-          contentRef={contentRef}
-          activeProject={activeProject}
-          pageKeys={pageKeys}
-          prevPageKey={prevPageKey}
-          nextPageKey={nextPageKey}
-          activeTheme={activeTheme}
-          PALETTE={PALETTE}
-          scrollToTop={scrollToTop}
-          handleSaveNewData={handleSaveNewData}
-          handleUpdateDocument={handleUpdateDocument}
-          handleDeleteDocument={handleDeleteDocument}
-          handleDeleteProject={handleDeleteProject}
-          renderContent={renderContent}
-          currentPageData={currentPageData}
-        />
-      ) : (
-        <SidebarLayout
-          projects={projects}
-          activeProjectId={activeProjectId}
-          setActiveProjectId={setActiveProjectId}
-          activePage={activePage}
-          setActivePage={setActivePage}
-          isAddingData={isAddingData}
-          setIsAddingData={setIsAddingData}
-          isEditingData={isEditingData}
-          setIsEditingData={setIsEditingData}
-          viewMode={viewMode}
-          setViewMode={setViewMode}
-          activeProject={activeProject}
-          pageKeys={pageKeys}
-          prevPageKey={prevPageKey}
-          nextPageKey={nextPageKey}
-          activeTheme={activeTheme}
-          PALETTE={PALETTE}
-          scrollToTop={scrollToTop}
-          currentPageData={currentPageData}
-          handleSaveNewData={handleSaveNewData}
-          handleUpdateDocument={handleUpdateDocument}
-          handleDeleteDocument={handleDeleteDocument}
-          handleDeleteProject={handleDeleteProject}
-          renderContent={renderContent}
-        />
-      )}
-
-      {/* --- Bottom Info Bar --- */}
-      {viewMode === 'cabinet' && (
-        <footer
-          className="fixed bottom-0 left-0 right-0 z-20 flex items-center justify-between px-6 py-2 border-t"
-          style={{
-            borderColor: 'rgba(255,255,255,0.06)',
-            background: '#0d0d0e',
-            color: '#888',
-          }}
-        >
-          <span className="font-display font-bold uppercase" style={{ fontSize: '10px', letterSpacing: '0.05em' }}>
-            GRID DAILY_{activeProject.version}
-          </span>
-          <span className="font-mono-tech hidden md:block" style={{ fontSize: '8px', opacity: 0.4, letterSpacing: '0.05em' }}>
-            Visual Studies &middot; Type &middot; Image &middot; Emotion
-          </span>
-          <span className="font-mono-tech" style={{ fontSize: '8px', opacity: 0.35 }}>
-            FILE_{String(pageKeys.length).padStart(2, '0')}//
-          </span>
-        </footer>
-      )}
-      
+      <SidebarLayout
+        projects={projects}
+        activeProjectId={activeProjectId}
+        setActiveProjectId={setActiveProjectId}
+        activePage={activePage}
+        setActivePage={setActivePage}
+        isAddingData={isAddingData}
+        setIsAddingData={setIsAddingData}
+        isEditingData={isEditingData}
+        setIsEditingData={setIsEditingData}
+        activeProject={activeProject}
+        pageKeys={pageKeys}
+        prevPageKey={prevPageKey}
+        nextPageKey={nextPageKey}
+        activeTheme={activeTheme}
+        PALETTE={PALETTE}
+        currentPageData={currentPageData}
+        handleSaveNewData={handleSaveNewData}
+        handleUpdateDocument={handleUpdateDocument}
+        handleDeleteDocument={handleDeleteDocument}
+        handleDeleteProject={handleDeleteProject}
+        renderContent={renderContent}
+      />
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { Plus, ArrowLeft, ArrowRight, Edit3, Trash2, Settings } from 'lucide-react';
 import { DataEntryForm } from '../components/DataEntryForm';
 
@@ -12,15 +12,12 @@ export const SidebarLayout = ({
   setIsAddingData,
   isEditingData,
   setIsEditingData,
-  viewMode,
-  setViewMode,
   activeProject,
   pageKeys,
   prevPageKey,
   nextPageKey,
   activeTheme,
   PALETTE,
-  scrollToTop,
   currentPageData,
   handleSaveNewData,
   handleUpdateDocument,
@@ -29,6 +26,8 @@ export const SidebarLayout = ({
   renderContent
 }) => {
   const [showProjectSettings, setShowProjectSettings] = useState(false);
+  const contentRef = useRef(null);
+  const scrollToTop = () => contentRef.current?.scrollTo(0, 0);
 
   return (
     <div className="h-full w-full flex justify-center items-center px-2 md:px-6 lg:px-10 animate-fade-in" style={{ zIndex: 10 }}>
@@ -81,7 +80,8 @@ export const SidebarLayout = ({
         </div>
 
         {/* RIGHT SIDE: Active Folder Content */}
-        <div 
+        <div
+          ref={contentRef}
           className="flex-1 border-2 relative overflow-y-auto transition-colors duration-500 rounded-tr-lg rounded-br-lg"
           style={{
             backgroundColor: activeTheme.bgColor,
@@ -115,26 +115,6 @@ export const SidebarLayout = ({
             </div>
 
             <div className="flex items-center gap-4">
-              {/* View toggle */}
-              <div className="retro-toggle-group" style={{ borderColor: activeTheme.textColor }}>
-                <button
-                  type="button"
-                  onClick={() => setViewMode('cabinet')}
-                  className="retro-toggle-btn cursor-pointer"
-                  style={viewMode === 'cabinet' ? { backgroundColor: activeTheme.textColor, color: activeTheme.bgColor } : { color: activeTheme.textColor, opacity: 0.6 }}
-                >
-                  CABINET
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setViewMode('sidebar')}
-                  className="retro-toggle-btn cursor-pointer"
-                  style={viewMode === 'sidebar' ? { backgroundColor: activeTheme.textColor, color: activeTheme.bgColor } : { color: activeTheme.textColor, opacity: 0.6 }}
-                >
-                  SIDEBAR
-                </button>
-              </div>
-
               <button 
                 onClick={() => { setIsAddingData(!isAddingData); setIsEditingData(false); }} 
                 className="p-2 border-2 transition-colors cursor-pointer" 
