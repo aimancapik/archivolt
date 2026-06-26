@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus, Minimize2, Maximize2, ArrowLeft, ArrowRight } from 'lucide-react';
+import { Plus, Minimize2, Maximize2, ArrowLeft, ArrowRight, Edit3, Trash2 } from 'lucide-react';
 import { cn } from '../utils/helpers';
 import { DataEntryForm } from '../components/DataEntryForm';
 
@@ -11,6 +11,8 @@ export const CabinetLayout = ({
   setActivePage,
   isAddingData,
   setIsAddingData,
+  isEditingData,
+  setIsEditingData,
   isExpanded,
   setIsExpanded,
   viewMode,
@@ -24,6 +26,10 @@ export const CabinetLayout = ({
   PALETTE,
   scrollToTop,
   handleSaveNewData,
+  handleUpdateDocument,
+  handleDeleteDocument,
+  handleDeleteProject,
+  currentPageData,
   renderContent
 }) => {
   return (
@@ -43,6 +49,7 @@ export const CabinetLayout = ({
                   setActiveProjectId(e.target.value);
                   setActivePage(Object.keys(projects[e.target.value].docs)[0]);
                   setIsAddingData(false);
+                  setIsEditingData(false);
                   setIsExpanded(false);
                 }}
                 className="appearance-none bg-transparent font-serif font-bold uppercase focus:outline-none cursor-pointer pr-2 border-none"
@@ -86,7 +93,7 @@ export const CabinetLayout = ({
               VER_{activeProject.version}
             </span>
             <button
-              onClick={() => setIsAddingData(!isAddingData)}
+              onClick={() => { setIsAddingData(!isAddingData); setIsEditingData(false); }}
               className="p-2 transition-all flex items-center gap-1.5 font-mono-tech text-xs cursor-pointer"
               style={{
                 border: '1px solid rgba(255,255,255,0.15)',
@@ -98,23 +105,62 @@ export const CabinetLayout = ({
               <Plus className="w-3.5 h-3.5" style={{ transition: 'transform 0.3s ease', transform: isAddingData ? 'rotate(45deg)' : 'none' }} />
               ADD_RECORD
             </button>
+            <button
+              type="button"
+              onClick={() => { setIsEditingData(true); setIsAddingData(false); }}
+              className="p-2 transition-all flex items-center gap-1.5 font-mono-tech text-xs cursor-pointer"
+              style={{ border: '1px solid rgba(255,255,255,0.15)', background: isEditingData ? '#e4decd' : 'transparent', color: isEditingData ? '#1a1b1c' : '#e4decd' }}
+              title="Edit Document"
+            >
+              <Edit3 className="w-3.5 h-3.5" /> EDIT
+            </button>
+            <button
+              type="button"
+              onClick={handleDeleteDocument}
+              className="p-2 transition-all flex items-center gap-1.5 font-mono-tech text-xs cursor-pointer"
+              style={{ border: '1px solid rgba(255,95,87,0.35)', background: 'transparent', color: '#ff5f57' }}
+              title="Delete Document"
+            >
+              <Trash2 className="w-3.5 h-3.5" /> DOC
+            </button>
+            <button
+              type="button"
+              onClick={handleDeleteProject}
+              className="p-2 transition-all flex items-center gap-1.5 font-mono-tech text-xs cursor-pointer"
+              style={{ border: '1px solid rgba(255,95,87,0.35)', background: 'transparent', color: '#ff5f57' }}
+              title="Delete Project"
+            >
+              <Trash2 className="w-3.5 h-3.5" /> PROJECT
+            </button>
           </div>
         </div>
 
         <div style={{ height: 1, background: 'rgba(255,255,255,0.1)', marginBottom: '48px' }} />
 
         {/* --- Main Content area --- */}
-        {isAddingData ? (
+        {isAddingData || isEditingData ? (
           <div className="archive-folder archive-folder-active" style={{ backgroundColor: activeTheme.bgColor, color: activeTheme.textColor, borderColor: activeTheme.borderColor }}>
             <div className="folder-tab">
-              <span className="folder-tab-badge">ADD</span>
-              <span className="folder-tab-title">NEW RECORD</span>
+              <span className="folder-tab-badge">{isEditingData ? 'EDIT' : 'ADD'}</span>
+              <span className="folder-tab-title">{isEditingData ? 'EDIT RECORD' : 'NEW RECORD'}</span>
               <div className="folder-tab-meta">
                 <span className="folder-tab-barcode" style={{ color: activeTheme.textColor }} />
               </div>
             </div>
             <div className="folder-body">
-              <DataEntryForm onSave={handleSaveNewData} onCancel={() => setIsAddingData(false)} activeColorTheme={activeTheme} activeProject={activeProject} />
+              <DataEntryForm
+                onSave={isEditingData ? handleUpdateDocument : handleSaveNewData}
+                onCancel={() => { setIsAddingData(false); setIsEditingData(false); }}
+                activeColorTheme={activeTheme}
+                activeProject={activeProject}
+                mode={isEditingData ? 'edit' : 'create'}
+                initialData={isEditingData ? {
+                  recordType: 'document',
+                  pageTitle: currentPageData.title,
+                  version: currentPageData.subtitle,
+                  blocks: currentPageData.content
+                } : null}
+              />
             </div>
           </div>
         ) : (

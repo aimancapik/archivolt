@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus, ArrowLeft, ArrowRight } from 'lucide-react';
+import { Plus, ArrowLeft, ArrowRight, Edit3, Trash2 } from 'lucide-react';
 import { DataEntryForm } from '../components/DataEntryForm';
 
 export const SidebarLayout = ({
@@ -10,6 +10,8 @@ export const SidebarLayout = ({
   setActivePage,
   isAddingData,
   setIsAddingData,
+  isEditingData,
+  setIsEditingData,
   viewMode,
   setViewMode,
   activeProject,
@@ -21,6 +23,9 @@ export const SidebarLayout = ({
   scrollToTop,
   currentPageData,
   handleSaveNewData,
+  handleUpdateDocument,
+  handleDeleteDocument,
+  handleDeleteProject,
   renderContent
 }) => {
   return (
@@ -95,6 +100,7 @@ export const SidebarLayout = ({
                   setActiveProjectId(e.target.value);
                   setActivePage(Object.keys(projects[e.target.value].docs)[0]);
                   setIsAddingData(false); // Cancel adding if they switch project
+                  setIsEditingData(false);
                 }}
                 className="appearance-none bg-transparent font-serif font-bold text-xl md:text-3xl tracking-tighter uppercase focus:outline-none cursor-pointer border-none"
                 style={{ color: activeTheme.textColor }}
@@ -128,7 +134,7 @@ export const SidebarLayout = ({
               </div>
 
               <button 
-                onClick={() => setIsAddingData(!isAddingData)} 
+                onClick={() => { setIsAddingData(!isAddingData); setIsEditingData(false); }} 
                 className="p-2 border-2 transition-colors cursor-pointer" 
                 style={{
                   borderColor: activeTheme.textColor,
@@ -139,19 +145,54 @@ export const SidebarLayout = ({
               >
                 <Plus className="w-5 h-5 transition-transform" style={{ transform: isAddingData ? 'rotate(45deg)' : 'none' }} />
               </button>
+              <button
+                onClick={() => { setIsEditingData(true); setIsAddingData(false); }}
+                className="p-2 border-2 transition-colors cursor-pointer"
+                style={{
+                  borderColor: activeTheme.textColor,
+                  backgroundColor: isEditingData ? activeTheme.textColor : 'transparent',
+                  color: isEditingData ? activeTheme.bgColor : activeTheme.textColor,
+                }}
+                title="Edit Document"
+              >
+                <Edit3 className="w-5 h-5" />
+              </button>
+              <button
+                onClick={handleDeleteDocument}
+                className="p-2 border-2 transition-colors cursor-pointer"
+                style={{ borderColor: '#ff5f57', backgroundColor: 'transparent', color: '#ff5f57' }}
+                title="Delete Document"
+              >
+                <Trash2 className="w-5 h-5" />
+              </button>
+              <button
+                onClick={handleDeleteProject}
+                className="px-3 py-2 border-2 font-mono-tech text-[10px] uppercase transition-colors cursor-pointer"
+                style={{ borderColor: '#ff5f57', backgroundColor: 'transparent', color: '#ff5f57' }}
+                title="Delete Project"
+              >
+                Project
+              </button>
             </div>
           </div>
 
           {/* Inner Content Area */}
           <div className="p-6 md:p-12 lg:p-20 max-w-4xl mx-auto relative min-h-full">
             
-            {isAddingData ? (
+            {isAddingData || isEditingData ? (
               // --- RENDER THE NEW DATA ENTRY FORM ---
               <DataEntryForm 
-                onSave={handleSaveNewData} 
-                onCancel={() => setIsAddingData(false)} 
+                onSave={isEditingData ? handleUpdateDocument : handleSaveNewData}
+                onCancel={() => { setIsAddingData(false); setIsEditingData(false); }}
                 activeColorTheme={activeTheme}
                 activeProject={activeProject}
+                mode={isEditingData ? 'edit' : 'create'}
+                initialData={isEditingData ? {
+                  recordType: 'document',
+                  pageTitle: currentPageData.title,
+                  version: currentPageData.subtitle,
+                  blocks: currentPageData.content
+                } : null}
               />
             ) : (
               // --- RENDER STANDARD DOCUMENTATION ---

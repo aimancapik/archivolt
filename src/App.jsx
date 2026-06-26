@@ -176,6 +176,7 @@ export default function App() {
   const [activeProjectId, setActiveProjectId] = useState('nexus-ui');
   const [activePage, setActivePage] = useState('getting_started');
   const [isAddingData, setIsAddingData] = useState(false);
+  const [isEditingData, setIsEditingData] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const [viewMode, setViewMode] = useState('cabinet');
   const contentRef = useRef(null);
@@ -225,14 +226,25 @@ export default function App() {
     }
   }, [activePage, activeProjectId, viewMode]);
 
-  const buildContentBlocks = async (formData, folder) => Promise.all(formData.blocks.map(async (b) => ({
-    type: b.type,
-    value: b.value,
-    language: b.language,
-    url: b.type === 'image' ? await uploadImage(b.file, folder) : undefined,
-    caption: b.type === 'image' ? b.value : undefined,
-    defaultCode: b.type === 'playground' ? b.value : undefined
-  })));
+  const buildContentBlocks = async (formData, folder) => Promise.all(formData.blocks.map(async (b) => {
+    const block = {
+      type: b.type,
+      value: b.value,
+      language: b.language,
+      defaultCode: b.type === 'playground' ? b.value : undefined
+    };
+
+    if (b.type === 'image') {
+      block.url = b.file ? await uploadImage(b.file, folder) : b.url;
+      block.caption = b.value;
+    }
+
+    if (b.type === 'list') {
+      block.items = b.value.split('\n').map((item) => item.trim()).filter(Boolean);
+    }
+
+    return block;
+  }));
 
   const handleSaveNewData = async (formData) => {
     if (formData.recordType === 'document') {
@@ -253,6 +265,7 @@ export default function App() {
       });
       setActivePage(newPageId);
       setIsAddingData(false);
+      setIsEditingData(false);
       setIsExpanded(false);
     } else {
       const newId = formData.projectName.toLowerCase().replace(/\s+/g, '-');
@@ -276,8 +289,72 @@ export default function App() {
       setActiveProjectId(newId);
       setActivePage('index');
       setIsAddingData(false);
+      setIsEditingData(false);
       setIsExpanded(false);
     }
+  };
+
+  const handleUpdateDocument = async (formData) => {
+    const content = await buildContentBlocks(formData, `${activeProjectId}/${activePage}`);
+    setProjects((prev) => {
+      const next = { ...prev };
+      const project = { ...next[activeProjectId] };
+      project.docs = {
+        ...project.docs,
+        [activePage]: {
+          ...project.docs[activePage],
+          title: formData.pageTitle.toUpperCase(),
+          subtitle: formData.version.toUpperCase(),
+          content
+        }
+      };
+      next[activeProjectId] = project;
+      return next;
+    });
+    setIsEditingData(false);
+    setIsAddingData(false);
+  };
+
+  const handleDeleteDocument = () => {
+    if (!activeProject || pageKeys.length <= 1) {
+      alert('ERROR: PROJECT NEEDS AT LEAST ONE DOCUMENT.');
+      return;
+    }
+    if (!confirm(`Delete document "${currentPageData.title}"?`)) return;
+
+    const nextPage = nextPageKey || prevPageKey;
+    setProjects((prev) => {
+      const next = { ...prev };
+      const project = { ...next[activeProjectId] };
+      const docs = { ...project.docs };
+      delete docs[activePage];
+      project.docs = docs;
+      next[activeProjectId] = project;
+      return next;
+    });
+    setActivePage(nextPage);
+    setIsAddingData(false);
+    setIsEditingData(false);
+  };
+
+  const handleDeleteProject = () => {
+    const projectIds = Object.keys(projects);
+    if (projectIds.length <= 1) {
+      alert('ERROR: ARCHIVE NEEDS AT LEAST ONE PROJECT.');
+      return;
+    }
+    if (!confirm(`Delete project "${activeProject.name}" and all documents?`)) return;
+
+    const nextProjectId = projectIds.find((id) => id !== activeProjectId);
+    setProjects((prev) => {
+      const next = { ...prev };
+      delete next[activeProjectId];
+      return next;
+    });
+    setActiveProjectId(nextProjectId);
+    setActivePage(Object.keys(projects[nextProjectId].docs)[0]);
+    setIsAddingData(false);
+    setIsEditingData(false);
   };
 
   const renderContent = (block, index) => {
@@ -300,7 +377,7 @@ export default function App() {
       case 'list':
         return (
           <ul key={index} className="font-mono-tech pl-6 mb-6 space-y-3" style={{ listStyleType: 'square', opacity: 0.85, fontSize: '13px' }}>
-            {block.items.map((item, i) => <li key={i}>{item}</li>)}
+            {(block.items || []).map((item, i) => <li key={i}>{item}</li>)}
           </ul>
         );
       case 'playground':
@@ -322,6 +399,8 @@ export default function App() {
           setActivePage={setActivePage}
           isAddingData={isAddingData}
           setIsAddingData={setIsAddingData}
+          isEditingData={isEditingData}
+          setIsEditingData={setIsEditingData}
           isExpanded={isExpanded}
           setIsExpanded={setIsExpanded}
           viewMode={viewMode}
@@ -335,7 +414,11 @@ export default function App() {
           PALETTE={PALETTE}
           scrollToTop={scrollToTop}
           handleSaveNewData={handleSaveNewData}
+          handleUpdateDocument={handleUpdateDocument}
+          handleDeleteDocument={handleDeleteDocument}
+          handleDeleteProject={handleDeleteProject}
           renderContent={renderContent}
+          currentPageData={currentPageData}
         />
       ) : (
         <SidebarLayout
@@ -346,6 +429,8 @@ export default function App() {
           setActivePage={setActivePage}
           isAddingData={isAddingData}
           setIsAddingData={setIsAddingData}
+          isEditingData={isEditingData}
+          setIsEditingData={setIsEditingData}
           viewMode={viewMode}
           setViewMode={setViewMode}
           activeProject={activeProject}
@@ -357,6 +442,9 @@ export default function App() {
           scrollToTop={scrollToTop}
           currentPageData={currentPageData}
           handleSaveNewData={handleSaveNewData}
+          handleUpdateDocument={handleUpdateDocument}
+          handleDeleteDocument={handleDeleteDocument}
+          handleDeleteProject={handleDeleteProject}
           renderContent={renderContent}
         />
       )}

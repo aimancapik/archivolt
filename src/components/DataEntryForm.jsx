@@ -2,16 +2,25 @@ import React, { useState } from 'react';
 import { X, GripVertical, Trash2, Save, Plus, Image } from 'lucide-react';
 import { cn } from '../utils/helpers';
 
-export const DataEntryForm = ({ onSave, onCancel, activeColorTheme: theme, activeProject }) => {
+const blockFromContent = (block, index) => ({
+  id: `${Date.now()}-${index}`,
+  type: block.type,
+  value: block.type === 'list' ? (block.items || []).join('\n') : block.caption || block.value || block.defaultCode || '',
+  language: block.language,
+  url: block.url
+});
+
+export const DataEntryForm = ({ onSave, onCancel, activeColorTheme: theme, activeProject, initialData = null, mode = 'create' }) => {
+  const isEditing = mode === 'edit';
   // Form States
-  const [recordType, setRecordType] = useState('document');
+  const [recordType, setRecordType] = useState(initialData?.recordType || 'document');
   const [projectName, setProjectName] = useState('');
-  const [version, setVersion] = useState('CODE_009 // TEST');
-  const [pageTitle, setPageTitle] = useState('NEW REC');
+  const [version, setVersion] = useState(initialData?.version || 'CODE_009 // TEST');
+  const [pageTitle, setPageTitle] = useState(initialData?.pageTitle || 'NEW REC');
   const [isSaving, setIsSaving] = useState(false);
 
   // Blocks list state - initialized with a Heading block and a Text block
-  const [blocks, setBlocks] = useState([
+  const [blocks, setBlocks] = useState(initialData?.blocks?.map(blockFromContent) || [
     { id: '1', type: 'heading', value: 'NEW SECTION' },
     { id: '2', type: 'text', value: 'Enter description or notes here...' }
   ]);
@@ -25,6 +34,9 @@ export const DataEntryForm = ({ onSave, onCancel, activeColorTheme: theme, activ
     let defaultVal = '';
     if (type === 'playground') {
       defaultVal = "<style>\n  body { background: #111; color: #e4decd; font-family: monospace; padding: 2rem; }\n  button { background: #e4decd; color: #111; border: 1px solid #111; padding: 0.5rem 1rem; cursor: pointer; font-weight: bold; box-shadow: 2px 2px 0px #000; transition: all 0.1s ease; }\n  button:hover { background: #f0ebd9; transform: translate(-1px, -1px); box-shadow: 3px 3px 0px #000; }\n  button:active { background: #c3baa2; transform: translate(1px, 1px); box-shadow: 1px 1px 0px #000; }\n</style>\n\n<h1>>> READY</h1>\n<button onclick=\"alert('RUNNING')\">CLICK</button>";
+    }
+    if (type === 'list') {
+      defaultVal = 'First item\nSecond item';
     }
     const newBlock = {
       id: `${Date.now()}${Math.random().toString(36).substr(2, 5)}`,
@@ -96,11 +108,11 @@ export const DataEntryForm = ({ onSave, onCancel, activeColorTheme: theme, activ
 
     // Validate that all blocks have content
     for (let i = 0; i < blocks.length; i++) {
-      if (blocks[i].type === 'image' && !blocks[i].file) {
+      if (blocks[i].type === 'image' && !blocks[i].file && !blocks[i].url) {
         alert(`ERROR: BLOCK #${i + 1} NEEDS AN IMAGE FILE.`);
         return;
       }
-      if (blocks[i].type !== 'image' && !blocks[i].value.trim()) {
+      if (!['image', 'demo-input'].includes(blocks[i].type) && !blocks[i].value.trim()) {
         alert(`ERROR: BLOCK #${i + 1} (${blocks[i].type.toUpperCase()}) CANNOT BE EMPTY.`);
         return;
       }
@@ -128,7 +140,7 @@ export const DataEntryForm = ({ onSave, onCancel, activeColorTheme: theme, activ
         <div>
           <h2 className="font-display text-2xl font-bold uppercase" style={{ letterSpacing: '-0.03em' }}>DATA ENTRY TERMINAL</h2>
           <p className="font-mono-tech mt-1" style={{ fontSize: '10px', opacity: 0.6 }}>
-            {recordType === 'document' ? `AWAITING NEW DOCUMENT LOG FOR ${activeProject ? activeProject.name : ''}` : 'AWAITING NEW DIRECTORY INPUT...'}
+            {isEditing ? 'EDITING CURRENT DOCUMENT' : recordType === 'document' ? `AWAITING NEW DOCUMENT LOG FOR ${activeProject ? activeProject.name : ''}` : 'AWAITING NEW DIRECTORY INPUT...'}
           </p>
         </div>
         <button type="button" onClick={onCancel} className="p-2 transition-colors cursor-pointer" style={{ border: `1px solid ${theme.textColor}`, background: 'transparent', color: 'inherit' }}>
@@ -138,7 +150,7 @@ export const DataEntryForm = ({ onSave, onCancel, activeColorTheme: theme, activ
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Record Type Selector */}
-        <div className="space-y-2 mb-6">
+        {!isEditing && <div className="space-y-2 mb-6">
           <label className="font-mono-tech uppercase font-bold block" style={{ fontSize: '9px', letterSpacing: '0.12em' }}>RECORD_TYPE</label>
           <div className="retro-toggle-group" style={{ borderColor: theme.textColor }}>
             <button
@@ -158,7 +170,7 @@ export const DataEntryForm = ({ onSave, onCancel, activeColorTheme: theme, activ
               PROJECT
             </button>
           </div>
-        </div>
+        </div>}
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {recordType === 'document' ? (
@@ -316,16 +328,30 @@ export const DataEntryForm = ({ onSave, onCancel, activeColorTheme: theme, activ
                       </div>
                     )}
 
+                    {block.type === 'list' && (
+                      <div>
+                        <label className="font-mono-tech block text-[9px] uppercase opacity-45 mb-1">LIST ITEMS</label>
+                        <textarea
+                          value={block.value}
+                          onChange={(e) => updateBlockValue(block.id, e.target.value)}
+                          className="w-full p-2 bg-transparent font-mono-tech focus:outline-none resize-y"
+                          style={{ borderBottom: `1px solid ${theme.textColor}`, fontSize: '13px', minHeight: '80px', color: 'inherit' }}
+                          placeholder="One item per line..."
+                          required
+                        />
+                      </div>
+                    )}
+
                     {block.type === 'image' && (
                       <div>
                         <label className="font-mono-tech block text-[9px] uppercase opacity-45 mb-1">IMAGE</label>
+                        {block.url && <img src={block.url} alt="" className="mb-2 max-h-32 w-auto" />}
                         <input
                           type="file"
                           accept="image/*"
                           onChange={(e) => updateBlockFile(block.id, e.target.files[0])}
                           className="w-full p-2 bg-transparent font-mono-tech focus:outline-none"
                           style={{ borderBottom: `1px solid ${theme.textColor}`, fontSize: '12px', color: 'inherit' }}
-                          required
                         />
                         <input
                           type="text"
@@ -335,6 +361,12 @@ export const DataEntryForm = ({ onSave, onCancel, activeColorTheme: theme, activ
                           style={{ borderBottom: `1px solid ${theme.textColor}`, fontSize: '12px', color: 'inherit' }}
                           placeholder="Caption..."
                         />
+                      </div>
+                    )}
+
+                    {block.type === 'demo-input' && (
+                      <div className="font-mono-tech text-[10px] uppercase opacity-60 py-3">
+                        INTERACTIVE INPUT DEMO
                       </div>
                     )}
                   </div>
@@ -395,6 +427,14 @@ export const DataEntryForm = ({ onSave, onCancel, activeColorTheme: theme, activ
               </button>
               <button
                 type="button"
+                onClick={() => addBlock('list')}
+                className="px-4 py-2 border font-mono-tech text-xs cursor-pointer hover:bg-[rgba(255,255,255,0.05)] transition-colors flex items-center gap-1.5"
+                style={{ borderColor: theme.textColor, color: theme.textColor, borderRadius: '4px', background: 'transparent' }}
+              >
+                <Plus className="w-3.5 h-3.5" /> LIST
+              </button>
+              <button
+                type="button"
                 onClick={() => addBlock('image')}
                 className="px-4 py-2 border font-mono-tech text-xs cursor-pointer hover:bg-[rgba(255,255,255,0.05)] transition-colors flex items-center gap-1.5"
                 style={{ borderColor: theme.textColor, color: theme.textColor, borderRadius: '4px', background: 'transparent' }}
@@ -409,7 +449,7 @@ export const DataEntryForm = ({ onSave, onCancel, activeColorTheme: theme, activ
           disabled={isSaving}
           className="w-full py-4 bg-transparent font-display font-bold uppercase flex items-center justify-center gap-2 transition-all cursor-pointer"
           style={{ border: `1px solid ${theme.textColor}`, fontSize: '14px', letterSpacing: '0.1em', color: theme.textColor, opacity: isSaving ? 0.6 : 1 }}>
-          <Save className="w-4 h-4" /> {isSaving ? 'SAVING...' : 'COMMIT_RECORD'}
+          <Save className="w-4 h-4" /> {isSaving ? 'SAVING...' : isEditing ? 'UPDATE_RECORD' : 'COMMIT_RECORD'}
         </button>
       </form>
     </div>
