@@ -234,7 +234,7 @@ export default function App() {
         url: sticker.file ? await uploadImage(sticker.file, folder) : sticker.url,
         x: Number(sticker.x) || 0,
         y: Number(sticker.y) || 0,
-        width: Number(sticker.width) || 180,
+        width: Number(sticker.width) || 22,
         rotation: Number(sticker.rotation) || 0
       })));
     }
@@ -381,9 +381,9 @@ export default function App() {
             alt=""
             className="pointer-events-none absolute z-20"
             style={{
-              left: `${block.x || 0}px`,
-              top: `${block.y || 0}px`,
-              width: `${block.width || 180}px`,
+              left: `${block.x > 100 ? block.x / 8 : block.x || 0}%`,
+              top: `${block.y > 100 ? block.y / 6 : block.y || 0}%`,
+              width: `${block.width > 100 ? block.width / 8 : block.width || 22}%`,
               transform: `translate(-50%, -50%) rotate(${block.rotation || 0}deg)`,
             }}
           />
@@ -396,9 +396,9 @@ export default function App() {
             alt=""
             className="pointer-events-none absolute z-20"
             style={{
-              left: `${sticker.x || 0}px`,
-              top: `${sticker.y || 0}px`,
-              width: `${sticker.width || 180}px`,
+              left: `${sticker.x > 100 ? sticker.x / 8 : sticker.x || 0}%`,
+              top: `${sticker.y > 100 ? sticker.y / 6 : sticker.y || 0}%`,
+              width: `${sticker.width > 100 ? sticker.width / 8 : sticker.width || 22}%`,
               transform: `translate(-50%, -50%) rotate(${sticker.rotation || 0}deg)`,
             }}
           />

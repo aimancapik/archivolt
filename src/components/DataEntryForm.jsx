@@ -5,9 +5,9 @@ import { cn } from '../utils/helpers';
 const stickerFromContent = (sticker, index) => ({
   id: sticker.id || `${Date.now()}-sticker-${index}`,
   url: sticker.url,
-  x: sticker.x || 0,
-  y: sticker.y || 0,
-  width: sticker.width || 180,
+  x: sticker.x > 100 ? Math.round(sticker.x / 8) : sticker.x || sticker.xPct || 0,
+  y: sticker.y > 100 ? Math.round(sticker.y / 6) : sticker.y || sticker.yPct || 0,
+  width: sticker.width > 100 ? Math.round(sticker.width / 8) : sticker.width || 22,
   rotation: sticker.rotation || 0
 });
 
@@ -146,7 +146,7 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
       previewUrl: URL.createObjectURL(file),
       x: 0,
       y: 0,
-      width: 180,
+      width: 22,
       rotation: 0
     }));
     setBlocks((prev) => prev.map((b) => b.id === id ? {
@@ -504,8 +504,8 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
                             if (!selectedSticker) return;
                             const rect = e.currentTarget.getBoundingClientRect();
                             updateSelectedSticker(block.id, {
-                              x: Math.round(e.clientX - rect.left),
-                              y: Math.round(e.clientY - rect.top)
+                              x: Math.round(((e.clientX - rect.left) / rect.width) * 100),
+                              y: Math.round(((e.clientY - rect.top) / rect.height) * 100)
                             });
                           }}
                           className="relative mt-3 w-full min-h-[320px] overflow-hidden text-left cursor-crosshair"
@@ -533,9 +533,9 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
                               alt=""
                               className="absolute pointer-events-none"
                               style={{
-                                left: `${sticker.x || 0}px`,
-                                top: `${sticker.y || 0}px`,
-                                width: `${sticker.width || 180}px`,
+                                left: `${sticker.x > 100 ? sticker.x / 8 : sticker.x || 0}%`,
+                                top: `${sticker.y > 100 ? sticker.y / 6 : sticker.y || 0}%`,
+                                width: `${sticker.width > 100 ? sticker.width / 8 : sticker.width || 22}%`,
                                 transform: `translate(-50%, -50%) rotate(${sticker.rotation || 0}deg)`,
                                 outline: sticker.id === selectedSticker?.id ? `1px solid ${theme.textColor}` : 'none',
                               }}
@@ -544,7 +544,7 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
                         </button>
                         <div className="grid grid-cols-[1fr_1fr_auto_auto] gap-3 mt-3 items-end">
                           {[
-                            ['width', 'WIDTH', 10, 40, 180],
+                            ['width', 'WIDTH', 2, 5, 22],
                             ['rotation', 'ROTATE', 5, -180, 0]
                           ].map(([key, label, step, min, fallback]) => (
                             <div key={key} className="font-mono-tech text-[9px] uppercase opacity-70">
@@ -580,7 +580,7 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
                           <button
                             type="button"
                             onClick={() => {
-                              updateSelectedSticker(block.id, { x: 0, y: 0, width: 180, rotation: 0 });
+                              updateSelectedSticker(block.id, { x: 0, y: 0, width: 22, rotation: 0 });
                             }}
                             className="grid h-10 w-10 place-items-center cursor-pointer"
                             style={{ border: `1px solid ${theme.borderColor}`, color: 'inherit' }}
