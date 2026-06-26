@@ -96,7 +96,7 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
 
   const updateBlockFile = (id, file) => {
     setBlocks((prev) =>
-      prev.map((b) => (b.id === id ? { ...b, file } : b))
+      prev.map((b) => (b.id === id ? { ...b, file, previewUrl: file ? URL.createObjectURL(file) : '' } : b))
     );
   };
 
@@ -412,10 +412,51 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
                           className="w-full p-2 bg-transparent font-mono-tech focus:outline-none"
                           style={{ borderBottom: `1px solid ${theme.textColor}`, fontSize: '12px', color: 'inherit' }}
                         />
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            const rect = e.currentTarget.getBoundingClientRect();
+                            updateBlockMeta(block.id, 'x', Math.round(e.clientX - rect.left));
+                            updateBlockMeta(block.id, 'y', Math.round(e.clientY - rect.top));
+                          }}
+                          className="relative mt-3 w-full min-h-[320px] overflow-hidden text-left cursor-crosshair"
+                          style={{
+                            border: `1px solid ${theme.borderColor}`,
+                            background: theme.bgColor,
+                            color: theme.textColor,
+                          }}
+                        >
+                          <div className="p-6 pointer-events-none">
+                            <div className="font-serif font-bold text-3xl mb-4 opacity-80">{pageTitle || 'DOCUMENT TITLE'}</div>
+                            <div className="font-mono-tech text-xs leading-6 opacity-60 max-w-xl">
+                              Click anywhere in this preview to place the sticker. The position is saved from that point.
+                            </div>
+                            <div className="mt-8 space-y-3 opacity-30">
+                              <div className="h-3 w-5/6" style={{ background: theme.textColor }} />
+                              <div className="h-3 w-3/5" style={{ background: theme.textColor }} />
+                              <div className="h-3 w-4/6" style={{ background: theme.textColor }} />
+                            </div>
+                          </div>
+                          {(block.previewUrl || block.url) && (
+                            <img
+                              src={block.previewUrl || block.url}
+                              alt=""
+                              className="absolute pointer-events-none"
+                              style={{
+                                left: `${block.x || 0}px`,
+                                top: `${block.y || 0}px`,
+                                width: `${block.width || 180}px`,
+                                transform: `rotate(${block.rotation || 0}deg)`,
+                              }}
+                            />
+                          )}
+                          <span
+                            className="absolute h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full"
+                            style={{ left: `${block.x || 0}px`, top: `${block.y || 0}px`, background: '#ff5f57' }}
+                          />
+                        </button>
+                        <div className="grid grid-cols-2 gap-3 mt-3">
                           {[
-                            ['x', 'X'],
-                            ['y', 'Y'],
                             ['width', 'WIDTH'],
                             ['rotation', 'ROTATE']
                           ].map(([key, label]) => (
