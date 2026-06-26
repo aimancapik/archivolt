@@ -7,7 +7,11 @@ const blockFromContent = (block, index) => ({
   type: block.type,
   value: block.type === 'list' ? (block.items || []).join('\n') : block.caption || block.value || block.defaultCode || '',
   language: block.language,
-  url: block.url
+  url: block.url,
+  x: block.x || 0,
+  y: block.y || 0,
+  width: block.width || 180,
+  rotation: block.rotation || 0
 });
 
 const formSignature = ({ recordType, projectName, version, pageTitle, blocks }) => JSON.stringify({
@@ -15,12 +19,16 @@ const formSignature = ({ recordType, projectName, version, pageTitle, blocks }) 
   projectName,
   version,
   pageTitle,
-  blocks: blocks.map(({ type, value, language, url, file }) => ({
+  blocks: blocks.map(({ type, value, language, url, file, x, y, width, rotation }) => ({
     type,
     value,
     language,
     url,
-    fileName: file?.name || ''
+    fileName: file?.name || '',
+    x,
+    y,
+    width,
+    rotation
   }))
 });
 
@@ -92,6 +100,12 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
     );
   };
 
+  const updateBlockMeta = (id, key, value) => {
+    setBlocks((prev) =>
+      prev.map((b) => (b.id === id ? { ...b, [key]: value } : b))
+    );
+  };
+
   // HTML5 Drag Handlers
   const handleDragStart = (index) => {
     setDraggedIndex(index);
@@ -131,11 +145,11 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
 
     // Validate that all blocks have content
     for (let i = 0; i < blocks.length; i++) {
-      if (blocks[i].type === 'image' && !blocks[i].file && !blocks[i].url) {
+      if (['image', 'sticker'].includes(blocks[i].type) && !blocks[i].file && !blocks[i].url) {
         alert(`ERROR: BLOCK #${i + 1} NEEDS AN IMAGE FILE.`);
         return;
       }
-      if (!['image', 'demo-input'].includes(blocks[i].type) && !blocks[i].value.trim()) {
+      if (!['image', 'sticker', 'demo-input'].includes(blocks[i].type) && !blocks[i].value.trim()) {
         alert(`ERROR: BLOCK #${i + 1} (${blocks[i].type.toUpperCase()}) CANNOT BE EMPTY.`);
         return;
       }
@@ -387,6 +401,39 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
                       </div>
                     )}
 
+                    {block.type === 'sticker' && (
+                      <div>
+                        <label className="font-mono-tech block text-[9px] uppercase opacity-45 mb-1">STICKER CUTOUT</label>
+                        {block.url && <img src={block.url} alt="" className="mb-2 max-h-32 w-auto" />}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => updateBlockFile(block.id, e.target.files[0])}
+                          className="w-full p-2 bg-transparent font-mono-tech focus:outline-none"
+                          style={{ borderBottom: `1px solid ${theme.textColor}`, fontSize: '12px', color: 'inherit' }}
+                        />
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
+                          {[
+                            ['x', 'X'],
+                            ['y', 'Y'],
+                            ['width', 'WIDTH'],
+                            ['rotation', 'ROTATE']
+                          ].map(([key, label]) => (
+                            <label key={key} className="font-mono-tech text-[9px] uppercase opacity-70">
+                              {label}
+                              <input
+                                type="number"
+                                value={block[key] ?? (key === 'width' ? 180 : 0)}
+                                onChange={(e) => updateBlockMeta(block.id, key, e.target.value)}
+                                className="mt-1 w-full p-2 bg-transparent font-mono-tech focus:outline-none"
+                                style={{ border: `1px solid ${theme.borderColor}`, color: 'inherit' }}
+                              />
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                     {block.type === 'demo-input' && (
                       <div className="font-mono-tech text-[10px] uppercase opacity-60 py-3">
                         INTERACTIVE INPUT DEMO
@@ -463,6 +510,14 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
                 style={{ borderColor: theme.textColor, color: theme.textColor, borderRadius: '4px', background: 'transparent' }}
               >
                 <Image className="w-3.5 h-3.5" /> IMAGE
+              </button>
+              <button
+                type="button"
+                onClick={() => addBlock('sticker')}
+                className="px-4 py-2 border font-mono-tech text-xs cursor-pointer hover:bg-[rgba(255,255,255,0.05)] transition-colors flex items-center gap-1.5"
+                style={{ borderColor: theme.textColor, color: theme.textColor, borderRadius: '4px', background: 'transparent' }}
+              >
+                <Image className="w-3.5 h-3.5" /> STICKER
               </button>
             </div>
           </div>

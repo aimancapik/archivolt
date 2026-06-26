@@ -4,7 +4,7 @@ import { InteractiveInputDemo } from './components/InteractiveInputDemo';
 import { LiveRunner } from './components/LiveRunner';
 import { SidebarLayout } from './layouts/SidebarLayout';
 import { isSupabaseConfigured } from './lib/supabase';
-import { loadRemoteProjects, saveRemoteProjects, uploadImage } from './lib/archiveStore';
+import { loadRemoteProjects, removeImageBackground, saveRemoteProjects, uploadImage } from './lib/archiveStore';
 
 const STORAGE_KEY = 'archivolt.projects';
 
@@ -220,6 +220,15 @@ export default function App() {
       block.caption = b.value;
     }
 
+    if (b.type === 'sticker') {
+      const stickerFile = b.file ? await removeImageBackground(b.file) : null;
+      block.url = stickerFile ? await uploadImage(stickerFile, folder) : b.url;
+      block.x = Number(b.x) || 0;
+      block.y = Number(b.y) || 0;
+      block.width = Number(b.width) || 180;
+      block.rotation = Number(b.rotation) || 0;
+    }
+
     if (b.type === 'list') {
       block.items = b.value.split('\n').map((item) => item.trim()).filter(Boolean);
     }
@@ -353,6 +362,21 @@ export default function App() {
             <img src={block.url} alt="Reference" className="w-full h-auto" style={{ filter: 'grayscale(0.8) contrast(1.15) brightness(0.85)' }} />
             {block.caption && <figcaption className="font-mono-tech uppercase mt-2" style={{ fontSize: '9px', color: '#888' }}>{block.caption}</figcaption>}
           </figure>
+        );
+      case 'sticker':
+        return (
+          <img
+            key={index}
+            src={block.url}
+            alt=""
+            className="pointer-events-none absolute z-20"
+            style={{
+              left: `${block.x || 0}px`,
+              top: `${block.y || 0}px`,
+              width: `${block.width || 180}px`,
+              transform: `rotate(${block.rotation || 0}deg)`,
+            }}
+          />
         );
       case 'list':
         return (

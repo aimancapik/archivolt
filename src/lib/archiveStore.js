@@ -38,11 +38,21 @@ export const uploadImage = async (file, folder = 'uploads') => {
     });
   }
 
-  const safeName = file.name.toLowerCase().replace(/[^a-z0-9.]+/g, '-');
+  const safeName = (file.name || 'sticker.png').toLowerCase().replace(/[^a-z0-9.]+/g, '-');
   const path = `${folder}/${Date.now()}-${safeName}`;
   const { error } = await supabase.storage.from(BUCKET).upload(path, file);
   if (error) throw error;
 
   const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
   return data.publicUrl;
+};
+
+export const removeImageBackground = async (file) => {
+  const removeBackground = (await import('@imgly/background-removal')).default;
+  const blob = await removeBackground(file, {
+    model: 'isnet_quint8',
+    output: { format: 'image/png', quality: 0.8, type: 'foreground' }
+  });
+
+  return new File([blob], `${file.name.replace(/\.[^.]+$/, '') || 'sticker'}-sticker.png`, { type: 'image/png' });
 };
