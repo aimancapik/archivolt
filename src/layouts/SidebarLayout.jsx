@@ -217,6 +217,7 @@ export const SidebarLayout = ({
                 activeColorTheme={activeTheme}
                 activeProject={activeProject}
                 mode={isEditingData ? 'edit' : 'create'}
+                renderContent={renderContent}
                 initialData={isEditingData ? {
                   recordType: 'document',
                   pageTitle: currentPageData.title,

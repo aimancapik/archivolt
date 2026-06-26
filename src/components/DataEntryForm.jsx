@@ -1,8 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { X, GripVertical, Trash2, Save, Plus, Image, ChevronUp, ChevronDown, RotateCcw, Upload } from 'lucide-react';
-import { CodeBlock } from './CodeBlock';
-import { InteractiveInputDemo } from './InteractiveInputDemo';
-import { LiveRunner } from './LiveRunner';
 import { cn } from '../utils/helpers';
 import { normalizeSticker, pointerToStickerPoint, stickerPlacementStyle } from '../utils/stickerPlacement';
 
@@ -53,7 +50,20 @@ const formSignature = ({ recordType, projectName, version, pageTitle, blocks }) 
   }))
 });
 
-export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activeColorTheme: theme, activeProject, initialData = null, mode = 'create' }) => {
+const previewBlockForRender = (block) => {
+  if (block.type === 'list') {
+    return { ...block, items: block.value.split('\n').map((item) => item.trim()).filter(Boolean) };
+  }
+  if (block.type === 'image') {
+    return { ...block, url: block.previewUrl || block.url, caption: block.value };
+  }
+  if (block.type === 'playground') {
+    return { ...block, defaultCode: block.value };
+  }
+  return block;
+};
+
+export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activeColorTheme: theme, activeProject, initialData = null, mode = 'create', renderContent }) => {
   const isEditing = mode === 'edit';
   // Form States
   const [recordType, setRecordType] = useState(initialData?.recordType || 'document');
@@ -261,37 +271,6 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
     } finally {
       setIsSaving(false);
     }
-  };
-
-  const renderPreviewBlock = (previewBlock, previewIndex) => {
-    if (previewBlock.type === 'stickers') return null;
-    if (previewBlock.type === 'heading') {
-      return <h2 key={previewIndex} className="font-serif font-bold mt-14 mb-6 pb-2 inline-block" style={{ fontSize: 'clamp(1.5rem, 3vw, 2.2rem)', borderBottom: '2px solid currentColor' }}>{previewBlock.value}</h2>;
-    }
-    if (previewBlock.type === 'text') {
-      return <p key={previewIndex} className="font-mono-tech leading-relaxed mb-6" style={{ fontSize: '14px', opacity: 0.85 }}>{previewBlock.value}</p>;
-    }
-    if (previewBlock.type === 'code') {
-      return <CodeBlock key={previewIndex} language={previewBlock.language} code={previewBlock.value} />;
-    }
-    if (previewBlock.type === 'demo-input') {
-      return <InteractiveInputDemo key={previewIndex} />;
-    }
-    if (previewBlock.type === 'playground') {
-      return <LiveRunner key={`${previewIndex}-${previewBlock.value}`} defaultCode={previewBlock.value} />;
-    }
-    if (previewBlock.type === 'list') {
-      return <ul key={previewIndex} className="font-mono-tech pl-6 mb-6 space-y-3" style={{ listStyleType: 'square', opacity: 0.85, fontSize: '13px' }}>{previewBlock.value.split('\n').filter(Boolean).map((item, itemIndex) => <li key={itemIndex}>{item}</li>)}</ul>;
-    }
-    if (previewBlock.type === 'image' && (previewBlock.previewUrl || previewBlock.url)) {
-      return (
-        <figure key={previewIndex} className="my-10 p-2" style={{ border: '1px solid rgba(255,255,255,0.1)', background: '#0d0d0e' }}>
-          <img src={previewBlock.previewUrl || previewBlock.url} alt="Reference" className="w-full h-auto" style={{ filter: 'grayscale(0.8) contrast(1.15) brightness(0.85)' }} />
-          {previewBlock.value && <figcaption className="font-mono-tech uppercase mt-2" style={{ fontSize: '9px', color: '#888' }}>{previewBlock.value}</figcaption>}
-        </figure>
-      );
-    }
-    return null;
   };
 
   return (
@@ -610,8 +589,10 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
                                 Select a sticker thumbnail first
                               </div>
                             )}
-                            <div className="pointer-events-none">
-                              {blocks.map(renderPreviewBlock)}
+                            <div className="pointer-events-none mt-12 md:mt-0 relative z-10 animate-fade-in">
+                              {blocks.map((previewBlock, previewIndex) => (
+                                previewBlock.type === 'stickers' ? null : renderContent(previewBlockForRender(previewBlock), previewIndex)
+                              ))}
                             </div>
                             {block.stickers?.filter((sticker) => sticker.placed).map((sticker) => (
                               <img
