@@ -144,6 +144,7 @@ export const SidebarLayout = ({
                   setIsAddingData(!isAddingData);
                   setIsEditingData(false);
                   setHasDirtyEdit(false);
+                  setShowProjectSettings(false);
                 }}
                 className="p-2 border-2 transition-colors cursor-pointer" 
                 style={{
@@ -155,30 +156,34 @@ export const SidebarLayout = ({
               >
                 <Plus className="w-5 h-5 transition-transform" style={{ transform: isAddingData ? 'rotate(45deg)' : 'none' }} />
               </button>
-              <button
-                onClick={() => { setIsEditingData(true); setIsAddingData(false); setHasDirtyEdit(false); }}
-                className="p-2 border-2 transition-colors cursor-pointer"
-                style={{
-                  borderColor: activeTheme.textColor,
-                  backgroundColor: isEditingData ? activeTheme.textColor : 'transparent',
-                  color: isEditingData ? activeTheme.bgColor : activeTheme.textColor,
-                }}
-                title="Edit Document"
-              >
-                <Edit3 className="w-5 h-5" />
-              </button>
-              <button
-                onClick={() => setShowProjectSettings(!showProjectSettings)}
-                className="p-2 border-2 transition-colors cursor-pointer"
-                style={{
-                  borderColor: activeTheme.textColor,
-                  backgroundColor: showProjectSettings ? activeTheme.textColor : 'transparent',
-                  color: showProjectSettings ? activeTheme.bgColor : activeTheme.textColor,
-                }}
-                title="Project Settings"
-              >
-                <Settings className="w-5 h-5" />
-              </button>
+              {!isAddingData && (
+                <>
+                  <button
+                    onClick={() => { setIsEditingData(true); setIsAddingData(false); setHasDirtyEdit(false); }}
+                    className="p-2 border-2 transition-colors cursor-pointer"
+                    style={{
+                      borderColor: activeTheme.textColor,
+                      backgroundColor: isEditingData ? activeTheme.textColor : 'transparent',
+                      color: isEditingData ? activeTheme.bgColor : activeTheme.textColor,
+                    }}
+                    title="Edit Document"
+                  >
+                    <Edit3 className="w-5 h-5" />
+                  </button>
+                  <button
+                    onClick={() => setShowProjectSettings(!showProjectSettings)}
+                    className="p-2 border-2 transition-colors cursor-pointer"
+                    style={{
+                      borderColor: activeTheme.textColor,
+                      backgroundColor: showProjectSettings ? activeTheme.textColor : 'transparent',
+                      color: showProjectSettings ? activeTheme.bgColor : activeTheme.textColor,
+                    }}
+                    title="Project Settings"
+                  >
+                    <Settings className="w-5 h-5" />
+                  </button>
+                </>
+              )}
             </div>
           </div>
 
