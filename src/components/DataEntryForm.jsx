@@ -87,6 +87,7 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
   // Drag states
   const [draggedIndex, setDraggedIndex] = useState(null);
   const [dragReadyBlockId, setDragReadyBlockId] = useState(null);
+  const hasStickerBlock = blocks.some((block) => block.type === 'stickers');
 
   useEffect(() => {
     onDirtyChange?.(currentSignature !== initialSignature);
@@ -710,14 +711,16 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
               >
                 <Image className="w-3.5 h-3.5" /> IMAGE
               </button>
-              <button
-                type="button"
-                onClick={() => addBlock('stickers')}
-                className="px-4 py-2 border font-mono-tech text-xs cursor-pointer hover:bg-[rgba(255,255,255,0.05)] transition-colors flex items-center gap-1.5"
-                style={{ borderColor: theme.textColor, color: theme.textColor, borderRadius: '4px', background: 'transparent' }}
-              >
-                <Image className="w-3.5 h-3.5" /> STICKERS
-              </button>
+              {!hasStickerBlock && (
+                <button
+                  type="button"
+                  onClick={() => addBlock('stickers')}
+                  className="px-4 py-2 border font-mono-tech text-xs cursor-pointer hover:bg-[rgba(255,255,255,0.05)] transition-colors flex items-center gap-1.5"
+                  style={{ borderColor: theme.textColor, color: theme.textColor, borderRadius: '4px', background: 'transparent' }}
+                >
+                  <Image className="w-3.5 h-3.5" /> STICKERS
+                </button>
+              )}
             </div>
           </div>
         </div>
