@@ -26,8 +26,28 @@ export const SidebarLayout = ({
   renderContent
 }) => {
   const [showProjectSettings, setShowProjectSettings] = useState(false);
+  const [hasDirtyEdit, setHasDirtyEdit] = useState(false);
   const contentRef = useRef(null);
   const scrollToTop = () => contentRef.current?.scrollTo(0, 0);
+
+  const confirmDiscardEdit = () => {
+    if (!isEditingData || !hasDirtyEdit) return true;
+    return confirm('Discard unsaved changes?');
+  };
+
+  const leaveEditor = () => {
+    setIsAddingData(false);
+    setIsEditingData(false);
+    setHasDirtyEdit(false);
+  };
+
+  const goToPage = (key) => {
+    if (key === activePage) return;
+    if (!confirmDiscardEdit()) return;
+    setActivePage(key);
+    leaveEditor();
+    scrollToTop();
+  };
 
   return (
     <div className="h-full w-full flex justify-center items-center px-2 md:px-6 lg:px-10 animate-fade-in" style={{ zIndex: 10 }}>
@@ -50,7 +70,7 @@ export const SidebarLayout = ({
             return (
               <button
                 key={key}
-                onClick={() => { setActivePage(key); setIsAddingData(false); }}
+                onClick={() => goToPage(key)}
                 className={`
                   flex-none flex flex-col justify-center items-center py-5 px-3 border-2 overflow-hidden
                   transition-all duration-300 ease-in-out relative origin-left cursor-pointer
@@ -99,10 +119,10 @@ export const SidebarLayout = ({
               <select 
                 value={activeProjectId}
                 onChange={(e) => {
+                  if (!confirmDiscardEdit()) return;
                   setActiveProjectId(e.target.value);
                   setActivePage(Object.keys(projects[e.target.value].docs)[0]);
-                  setIsAddingData(false); // Cancel adding if they switch project
-                  setIsEditingData(false);
+                  leaveEditor();
                 }}
                 className="appearance-none bg-transparent font-serif font-bold text-xl md:text-3xl tracking-tighter uppercase focus:outline-none cursor-pointer border-none"
                 style={{ color: activeTheme.textColor }}
@@ -116,7 +136,12 @@ export const SidebarLayout = ({
 
             <div className="flex items-center gap-4">
               <button 
-                onClick={() => { setIsAddingData(!isAddingData); setIsEditingData(false); }} 
+                onClick={() => {
+                  if (!confirmDiscardEdit()) return;
+                  setIsAddingData(!isAddingData);
+                  setIsEditingData(false);
+                  setHasDirtyEdit(false);
+                }}
                 className="p-2 border-2 transition-colors cursor-pointer" 
                 style={{
                   borderColor: activeTheme.textColor,
@@ -128,7 +153,7 @@ export const SidebarLayout = ({
                 <Plus className="w-5 h-5 transition-transform" style={{ transform: isAddingData ? 'rotate(45deg)' : 'none' }} />
               </button>
               <button
-                onClick={() => { setIsEditingData(true); setIsAddingData(false); }}
+                onClick={() => { setIsEditingData(true); setIsAddingData(false); setHasDirtyEdit(false); }}
                 className="p-2 border-2 transition-colors cursor-pointer"
                 style={{
                   borderColor: activeTheme.textColor,
@@ -172,9 +197,14 @@ export const SidebarLayout = ({
             {isAddingData || isEditingData ? (
               // --- RENDER THE NEW DATA ENTRY FORM ---
               <DataEntryForm 
+                key={`${isEditingData ? 'edit' : 'create'}-${activeProjectId}-${activePage}`}
                 onSave={isEditingData ? handleUpdateDocument : handleSaveNewData}
                 onDelete={isEditingData ? handleDeleteDocument : undefined}
-                onCancel={() => { setIsAddingData(false); setIsEditingData(false); }}
+                onDirtyChange={isEditingData ? setHasDirtyEdit : undefined}
+                onCancel={() => {
+                  if (!confirmDiscardEdit()) return;
+                  leaveEditor();
+                }}
                 activeColorTheme={activeTheme}
                 activeProject={activeProject}
                 mode={isEditingData ? 'edit' : 'create'}
@@ -210,7 +240,7 @@ export const SidebarLayout = ({
                 >
                   {prevPageKey ? (
                     <button 
-                      onClick={() => { setActivePage(prevPageKey); scrollToTop(); }} 
+                      onClick={() => goToPage(prevPageKey)} 
                       className="flex flex-col items-start p-4 border-2 transition-all cursor-pointer"
                       style={{ borderColor: activeTheme.textColor }}
                     >
@@ -220,7 +250,7 @@ export const SidebarLayout = ({
                   ) : <div />}
                   {nextPageKey ? (
                     <button 
-                      onClick={() => { setActivePage(nextPageKey); scrollToTop(); }} 
+                      onClick={() => goToPage(nextPageKey)} 
                       className="flex flex-col items-end text-right p-4 border-2 transition-all cursor-pointer"
                       style={{ borderColor: activeTheme.textColor }}
                     >

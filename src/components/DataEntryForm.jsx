@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { X, GripVertical, Trash2, Save, Plus, Image } from 'lucide-react';
 import { cn } from '../utils/helpers';
 
@@ -10,7 +10,21 @@ const blockFromContent = (block, index) => ({
   url: block.url
 });
 
-export const DataEntryForm = ({ onSave, onCancel, onDelete, activeColorTheme: theme, activeProject, initialData = null, mode = 'create' }) => {
+const formSignature = ({ recordType, projectName, version, pageTitle, blocks }) => JSON.stringify({
+  recordType,
+  projectName,
+  version,
+  pageTitle,
+  blocks: blocks.map(({ type, value, language, url, file }) => ({
+    type,
+    value,
+    language,
+    url,
+    fileName: file?.name || ''
+  }))
+});
+
+export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activeColorTheme: theme, activeProject, initialData = null, mode = 'create' }) => {
   const isEditing = mode === 'edit';
   // Form States
   const [recordType, setRecordType] = useState(initialData?.recordType || 'document');
@@ -24,10 +38,19 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, activeColorTheme: th
     { id: '1', type: 'heading', value: 'NEW SECTION' },
     { id: '2', type: 'text', value: 'Enter description or notes here...' }
   ]);
+  const currentSignature = useMemo(
+    () => formSignature({ recordType, projectName, version, pageTitle, blocks }),
+    [recordType, projectName, version, pageTitle, blocks]
+  );
+  const [initialSignature] = useState(currentSignature);
 
   // Drag states
   const [draggedIndex, setDraggedIndex] = useState(null);
   const [dragReadyBlockId, setDragReadyBlockId] = useState(null);
+
+  useEffect(() => {
+    onDirtyChange?.(currentSignature !== initialSignature);
+  }, [currentSignature, initialSignature, onDirtyChange]);
 
   // Actions
   const addBlock = (type) => {
