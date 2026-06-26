@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { Plus, ArrowLeft, ArrowRight, Edit3, Trash2, Settings } from 'lucide-react';
+import { Plus, ArrowLeft, ArrowRight, ChevronDown, Edit3, Trash2, Settings } from 'lucide-react';
 import { DataEntryForm } from '../components/DataEntryForm';
 
 export const SidebarLayout = ({
@@ -116,21 +116,24 @@ export const SidebarLayout = ({
             style={{ borderColor: activeTheme.borderColor }}
           >
             <div className="flex items-center gap-4">
-              <select 
-                value={activeProjectId}
-                onChange={(e) => {
-                  if (!confirmDiscardEdit()) return;
-                  setActiveProjectId(e.target.value);
-                  setActivePage(Object.keys(projects[e.target.value].docs)[0]);
-                  leaveEditor();
-                }}
-                className="appearance-none bg-transparent font-serif font-bold text-xl md:text-3xl tracking-tighter uppercase focus:outline-none cursor-pointer border-none"
-                style={{ color: activeTheme.textColor }}
-              >
-                {Object.values(projects).map((p) => (
-                  <option key={p.id} value={p.id} style={{ color: '#1a1b1c', background: '#e4decd' }}>{p.name}</option>
-                ))}
-              </select>
+              <div className="relative inline-flex items-center">
+                <select 
+                  value={activeProjectId}
+                  onChange={(e) => {
+                    if (!confirmDiscardEdit()) return;
+                    setActiveProjectId(e.target.value);
+                    setActivePage(Object.keys(projects[e.target.value].docs)[0]);
+                    leaveEditor();
+                  }}
+                  className="appearance-none bg-transparent font-serif font-bold text-xl md:text-3xl tracking-tighter uppercase focus:outline-none cursor-pointer border-none pr-8"
+                  style={{ color: activeTheme.textColor }}
+                >
+                  {Object.values(projects).map((p) => (
+                    <option key={p.id} value={p.id} style={{ color: '#1a1b1c', background: '#e4decd' }}>{p.name}</option>
+                  ))}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-0 h-4 w-4 opacity-60" />
+              </div>
               <span className="font-mono-tech text-xs opacity-50 hidden md:block">_{activeProject.version}</span>
             </div>
 
