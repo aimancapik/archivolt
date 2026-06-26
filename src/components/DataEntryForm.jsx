@@ -155,7 +155,7 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
     setBlocks((prev) => prev.map((b) => b.id === id ? {
       ...b,
       stickers: [...(b.stickers || []), ...nextStickers],
-      selectedStickerId: b.selectedStickerId || null
+      selectedStickerId: b.selectedStickerId || (nextStickers.length === 1 ? nextStickers[0]?.id : null)
     } : b));
   };
 
@@ -580,6 +580,11 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
                             }}
                             className="relative min-h-[720px]"
                           >
+                            {!selectedSticker && (
+                              <div className="absolute right-6 top-6 font-mono-tech text-[10px] uppercase opacity-50">
+                                Select a sticker thumbnail first
+                              </div>
+                            )}
                             {blocks.map(renderPreviewBlock)}
                             {block.stickers?.filter((sticker) => sticker.placed).map((sticker) => (
                               <img
