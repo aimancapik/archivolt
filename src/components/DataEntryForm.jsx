@@ -555,21 +555,6 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
                           </div>
                         )}
                         <div
-                          role="button"
-                          tabIndex={0}
-                          onClick={(e) => {
-                            if (!selectedSticker) return;
-                            const rect = e.currentTarget.getBoundingClientRect();
-                            updateSelectedSticker(block.id, {
-                              x: Math.round(((e.clientX - rect.left) / rect.width) * 100),
-                              y: Math.round(((e.clientY - rect.top + e.currentTarget.scrollTop) / e.currentTarget.scrollHeight) * 100),
-                              placed: true
-                            });
-                          }}
-                          onKeyDown={(e) => {
-                            if (e.key !== 'Enter' && e.key !== ' ') return;
-                            e.preventDefault();
-                          }}
                           className="relative mt-3 h-[520px] w-full overflow-y-auto text-left cursor-crosshair"
                           style={{
                             border: `1px solid ${theme.borderColor}`,
@@ -577,7 +562,24 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
                             color: theme.textColor,
                           }}
                         >
-                          <div className="relative min-h-[720px] p-8 pointer-events-none">
+                          <div
+                            role="button"
+                            tabIndex={0}
+                            onClick={(e) => {
+                              if (!selectedSticker) return;
+                              const rect = e.currentTarget.getBoundingClientRect();
+                              updateSelectedSticker(block.id, {
+                                x: Number((((e.clientX - rect.left) / rect.width) * 100).toFixed(2)),
+                                y: Number((((e.clientY - rect.top) / rect.height) * 100).toFixed(2)),
+                                placed: true
+                              });
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key !== 'Enter' && e.key !== ' ') return;
+                              e.preventDefault();
+                            }}
+                            className="relative min-h-[720px]"
+                          >
                             {blocks.map(renderPreviewBlock)}
                             {block.stickers?.filter((sticker) => sticker.placed).map((sticker) => (
                               <img
