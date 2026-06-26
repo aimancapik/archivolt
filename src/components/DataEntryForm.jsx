@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { X, GripVertical, Trash2, Save, Plus, Image } from 'lucide-react';
+import { X, GripVertical, Trash2, Save, Plus, Image, ChevronUp, ChevronDown, RotateCcw } from 'lucide-react';
 import { cn } from '../utils/helpers';
 
 const blockFromContent = (block, index) => ({
@@ -455,22 +455,55 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
                             style={{ left: `${block.x || 0}px`, top: `${block.y || 0}px`, background: '#ff5f57' }}
                           />
                         </button>
-                        <div className="grid grid-cols-2 gap-3 mt-3">
+                        <div className="grid grid-cols-[1fr_1fr_auto] gap-3 mt-3 items-end">
                           {[
-                            ['width', 'WIDTH'],
-                            ['rotation', 'ROTATE']
-                          ].map(([key, label]) => (
-                            <label key={key} className="font-mono-tech text-[9px] uppercase opacity-70">
+                            ['width', 'WIDTH', 10, 40, 180],
+                            ['rotation', 'ROTATE', 5, -180, 0]
+                          ].map(([key, label, step, min, fallback]) => (
+                            <div key={key} className="font-mono-tech text-[9px] uppercase opacity-70">
                               {label}
-                              <input
-                                type="number"
-                                value={block[key] ?? (key === 'width' ? 180 : 0)}
-                                onChange={(e) => updateBlockMeta(block.id, key, e.target.value)}
-                                className="mt-1 w-full p-2 bg-transparent font-mono-tech focus:outline-none"
+                              <div
+                                className="mt-1 flex h-10 items-center justify-between"
                                 style={{ border: `1px solid ${theme.borderColor}`, color: 'inherit' }}
-                              />
-                            </label>
+                              >
+                                <span className="px-3 text-xs">{block[key] ?? fallback}</span>
+                                <div className="flex h-full">
+                                  <button
+                                    type="button"
+                                    onClick={() => updateBlockMeta(block.id, key, Math.max(min, Number(block[key] ?? fallback) - step))}
+                                    className="grid w-9 place-items-center cursor-pointer"
+                                    style={{ borderLeft: `1px solid ${theme.borderColor}` }}
+                                    aria-label={`Decrease ${label.toLowerCase()}`}
+                                  >
+                                    <ChevronDown size={14} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => updateBlockMeta(block.id, key, Number(block[key] ?? fallback) + step)}
+                                    className="grid w-9 place-items-center cursor-pointer"
+                                    style={{ borderLeft: `1px solid ${theme.borderColor}` }}
+                                    aria-label={`Increase ${label.toLowerCase()}`}
+                                  >
+                                    <ChevronUp size={14} />
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
                           ))}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              updateBlockMeta(block.id, 'x', 0);
+                              updateBlockMeta(block.id, 'y', 0);
+                              updateBlockMeta(block.id, 'width', 180);
+                              updateBlockMeta(block.id, 'rotation', 0);
+                            }}
+                            className="grid h-10 w-10 place-items-center cursor-pointer"
+                            style={{ border: `1px solid ${theme.borderColor}`, color: 'inherit' }}
+                            aria-label="Reset sticker"
+                          >
+                            <RotateCcw size={16} />
+                          </button>
                         </div>
                       </div>
                     )}
