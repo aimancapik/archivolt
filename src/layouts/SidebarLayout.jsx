@@ -19,7 +19,7 @@ export const SidebarLayout = ({
   prevPageKey,
   nextPageKey,
   activeTheme,
-  getDocTheme,
+  PALETTE,
   scrollToTop,
   currentPageData,
   handleSaveNewData,
@@ -46,7 +46,7 @@ export const SidebarLayout = ({
           {pageKeys.map((key, index) => {
             const isActive = activePage === key;
             const doc = activeProject.docs[key];
-            const theme = getDocTheme(doc, index);
+            const theme = PALETTE[index % PALETTE.length];
             
             return (
               <button
@@ -202,8 +202,7 @@ export const SidebarLayout = ({
                   recordType: 'document',
                   pageTitle: currentPageData.title,
                   version: currentPageData.subtitle,
-                  blocks: currentPageData.content,
-                  theme: currentPageData.theme || 'current'
+                  blocks: currentPageData.content
                 } : null}
               />
             ) : (

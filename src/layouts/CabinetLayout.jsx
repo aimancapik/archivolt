@@ -23,7 +23,7 @@ export const CabinetLayout = ({
   prevPageKey,
   nextPageKey,
   activeTheme,
-  getDocTheme,
+  PALETTE,
   scrollToTop,
   handleSaveNewData,
   handleUpdateDocument,
@@ -165,8 +165,7 @@ export const CabinetLayout = ({
                   recordType: 'document',
                   pageTitle: currentPageData.title,
                   version: currentPageData.subtitle,
-                  blocks: currentPageData.content,
-                  theme: currentPageData.theme || 'current'
+                  blocks: currentPageData.content
                 } : null}
               />
             </div>
@@ -176,7 +175,7 @@ export const CabinetLayout = ({
             {pageKeys.map((key, index) => {
               const isActive = activePage === key;
               const doc = activeProject.docs[key];
-              const theme = getDocTheme(doc, index);
+              const theme = PALETTE[index % PALETTE.length];
 
               return (
                 <div
