@@ -1,0 +1,388 @@
+import React, { useState, useRef, useEffect } from 'react';
+import { CodeBlock } from './components/CodeBlock';
+import { InteractiveInputDemo } from './components/InteractiveInputDemo';
+import { LiveRunner } from './components/LiveRunner';
+import { CabinetLayout } from './layouts/CabinetLayout';
+import { SidebarLayout } from './layouts/SidebarLayout';
+import { isSupabaseConfigured } from './lib/supabase';
+import { loadRemoteProjects, saveRemoteProjects, uploadImage } from './lib/archiveStore';
+
+const STORAGE_KEY = 'archivolt.projects';
+
+// --- PALETTE (inline styles only — no dynamic Tailwind) ---
+const PALETTE = [
+  {
+    bgColor: '#e4decd', textColor: '#1a1b1c', accentColor: '#4a5240',
+    borderColor: 'rgba(26,27,28,0.2)',
+    gradient: 'linear-gradient(180deg, #ebe6d6 0%, #e4decd 50%, #d9d3c1 100%)',
+    pattern: 'dither',
+  },
+  {
+    bgColor: '#b8bdb0', textColor: '#1a1b1c', accentColor: '#3d4a35',
+    borderColor: 'rgba(26,27,28,0.2)',
+    gradient: 'linear-gradient(180deg, #c3c8bb 0%, #b8bdb0 50%, #aaafa2 100%)',
+    pattern: 'lines',
+  },
+  {
+    bgColor: '#1a1b1c', textColor: '#e4decd', accentColor: '#c4a35a',
+    borderColor: 'rgba(228,222,205,0.15)',
+    gradient: 'linear-gradient(180deg, #242526 0%, #1a1b1c 50%, #111213 100%)',
+    pattern: 'dots',
+  },
+  {
+    bgColor: '#6b5e4f', textColor: '#e4decd', accentColor: '#c9a96e',
+    borderColor: 'rgba(228,222,205,0.15)',
+    gradient: 'linear-gradient(180deg, #7a6d5e 0%, #6b5e4f 50%, #5a4e3f 100%)',
+    pattern: 'cross',
+  },
+  {
+    bgColor: '#78838b', textColor: '#e4decd', accentColor: '#a8b5be',
+    borderColor: 'rgba(228,222,205,0.15)',
+    gradient: 'linear-gradient(180deg, #869099 0%, #78838b 50%, #6a757d 100%)',
+    pattern: 'dither',
+  },
+];
+
+// --- MOCK DOCUMENTATION DATA ---
+const initialProjectsData = {
+  'nexus-ui': {
+    id: 'nexus-ui',
+    name: 'ARCHIVOLT',
+    version: 'v2.4.0',
+    docs: {
+      getting_started: {
+        title: "ARCHIVE LOG",
+        subtitle: "CODE_001 // INIT",
+        content: [
+          { type: 'heading', value: "INITIALIZATION SEQUENCE" },
+          { type: 'text', value: "Welcome to the central archive. This documentation outlines the core framework structure. Execute the commands below to begin the synchronization process." },
+          { type: 'code', language: 'bash', value: "> npm install nexus-grid\n> initialize_sequence --force" },
+          { type: 'heading', value: "SYSTEM BOOT" },
+          { type: 'text', value: "Import the core module into your primary operational file:" },
+          { type: 'code', language: 'javascript', value: "import { Core } from 'nexus-grid';\n\nfunction Boot() {\n  return <Core status=\"ONLINE\" />;\n}\n\nexport default Boot;" }
+        ]
+      },
+      components: {
+        title: "MODULES",
+        subtitle: "CODE_002 // UI",
+        content: [
+          { type: 'heading', value: "INTERFACE COMPONENTS" },
+          { type: 'text', value: "Standardized interactive elements for the visual interface." },
+          { type: 'image', url: "https://images.unsplash.com/photo-1550751827-4bd374c3f58b?auto=format&fit=crop&w=800&q=80", caption: "FIG 1: TERMINAL OUTPUT" },
+          { type: 'heading', value: "DATA INPUT TERMINAL" },
+          { type: 'text', value: "Live interaction block. Awaiting user input to update localized state." },
+          { type: 'demo-input' }
+        ]
+      },
+      api_reference: {
+        title: "DATA_STRUCT",
+        subtitle: "CODE_003 // API",
+        content: [
+          { type: 'heading', value: "extract_data(ref)" },
+          { type: 'text', value: "Parses raw system data into formatted output logs." },
+          { type: 'code', language: 'javascript', value: "const log = extract_data('0x7A');\nconsole.log(log); // STATUS: NOMINAL" },
+          { type: 'list', items: [
+            "ref (STRING): Hexadecimal reference ID.",
+            "RETURNS (OBJECT): Parsed system state."
+          ]}
+        ]
+      },
+      playground: {
+        title: "SIGNAL TEST",
+        subtitle: "CODE_004 // LIVE",
+        content: [
+          { type: 'text', value: "WARNING: Live code execution environment. Proceed with caution." },
+          { type: 'playground', defaultCode: "<style>\n  body { background: #111; color: #e4decd; font-family: monospace; padding: 2rem; }\n  button { background: #e4decd; color: #111; border: 1px solid #111; padding: 0.5rem 1rem; cursor: pointer; font-weight: bold; box-shadow: 2px 2px 0px #000; transition: all 0.1s ease; }\n  button:hover { background: #f0ebd9; transform: translate(-1px, -1px); box-shadow: 3px 3px 0px #000; }\n  button:active { background: #c3baa2; transform: translate(1px, 1px); box-shadow: 1px 1px 0px #000; }\n</style>\n\n<h1>>> TERMINAL READY</h1>\n<p>System awaiting manual override.</p>\n<button onclick=\"alert('OVERRIDE ACCEPTED')\">EXECUTE</button>" }
+        ]
+      },
+      changelog: {
+        title: "DRIFT LOG",
+        subtitle: "CODE_005 // DELTA",
+        content: [
+          { type: 'heading', value: "VERSION DELTA HISTORY" },
+          { type: 'text', value: "Chronological record of all system mutations and patch deployments." },
+          { type: 'code', language: 'bash', value: "> v2.4.0 — Signal pipeline overhaul\n> v2.3.1 — Memory leak patched in core loop\n> v2.3.0 — Added extract_data() API\n> v2.2.0 — Initial archive structure" }
+        ]
+      },
+      config: {
+        title: "SYS_CONF",
+        subtitle: "CODE_006 // ENV",
+        content: [
+          { type: 'heading', value: "ENVIRONMENT VARIABLES" },
+          { type: 'text', value: "Override default system behavior via configuration flags." },
+          { type: 'code', language: 'javascript', value: "export const CONFIG = {\n  DEBUG_MODE: false,\n  MAX_RETRIES: 3,\n  ARCHIVE_PATH: '/sys/archive/v2',\n  SIGNAL_TIMEOUT: 5000,\n};" },
+          { type: 'list', items: [
+            "DEBUG_MODE (BOOL): Enable verbose logging.",
+            "MAX_RETRIES (INT): Retry count before abort.",
+            "ARCHIVE_PATH (STRING): Base directory for records.",
+            "SIGNAL_TIMEOUT (INT): Max wait in ms."
+          ]}
+        ]
+      },
+      errors: {
+        title: "FAULT REF",
+        subtitle: "CODE_007 // ERR",
+        content: [
+          { type: 'heading', value: "ERROR CODES" },
+          { type: 'text', value: "Reference table for system fault diagnostics." },
+          { type: 'list', items: [
+            "ERR_0x01 — Archive path not found",
+            "ERR_0x02 — Signal timeout exceeded",
+            "ERR_0x03 — Invalid hex reference",
+            "ERR_0x04 — Data corruption detected",
+            "ERR_0xFF — Unknown system fault"
+          ]}
+        ]
+      },
+      credits: {
+        title: "ORIGIN",
+        subtitle: "CODE_008 // META",
+        content: [
+          { type: 'heading', value: "ATTRIBUTION" },
+          { type: 'text', value: "This archive was constructed by autonomous systems operating under directive 7A. All records are maintained without external intervention." }
+        ]
+      }
+    }
+  },
+  'project-nova': {
+    id: 'project-nova',
+    name: 'PROJECT_NOVA',
+    version: '02-A',
+    docs: {
+      welcome: {
+        title: "FALLING",
+        subtitle: "CODE_005 // NEXT",
+        content: [
+          { type: 'heading', value: "SECTOR NULL" },
+          { type: 'text', value: "This is a secondary project workspace. The archive is vast." }
+        ]
+      }
+    }
+  }
+};
+
+const loadProjects = () => {
+  try {
+    return JSON.parse(localStorage.getItem(STORAGE_KEY)) || initialProjectsData;
+  } catch {
+    return initialProjectsData;
+  }
+};
+
+// --- MAIN APPLICATION ---
+export default function App() {
+  const [projects, setProjects] = useState(loadProjects);
+  const [remoteReady, setRemoteReady] = useState(!isSupabaseConfigured);
+  const [activeProjectId, setActiveProjectId] = useState('nexus-ui');
+  const [activePage, setActivePage] = useState('getting_started');
+  const [isAddingData, setIsAddingData] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [viewMode, setViewMode] = useState('cabinet');
+  const contentRef = useRef(null);
+  const initialProjectsRef = useRef(projects);
+
+  const activeProject = projects[activeProjectId];
+
+  const pageKeys = activeProject ? Object.keys(activeProject.docs) : [];
+  const currentIndex = pageKeys.indexOf(activePage);
+  const prevPageKey = currentIndex > 0 ? pageKeys[currentIndex - 1] : null;
+  const nextPageKey = currentIndex < pageKeys.length - 1 ? pageKeys[currentIndex + 1] : null;
+  const activeTheme = PALETTE[currentIndex >= 0 ? currentIndex % PALETTE.length : 0];
+  const currentPageData = activeProject?.docs[activePage] || (activeProject ? Object.values(activeProject.docs)[0] : null);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
+    if (remoteReady) {
+      saveRemoteProjects(projects).catch((error) => console.warn('Supabase save failed:', error.message));
+    }
+  }, [projects, remoteReady]);
+
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+
+    loadRemoteProjects()
+      .then((remoteProjects) => {
+        if (remoteProjects) setProjects(remoteProjects);
+        else return saveRemoteProjects(initialProjectsRef.current);
+      })
+      .catch((error) => console.warn('Supabase load failed:', error.message))
+      .finally(() => setRemoteReady(true));
+  }, []);
+
+  const scrollToTop = () => {
+    if (contentRef.current) contentRef.current.scrollTo(0, 0);
+  };
+
+  useEffect(() => {
+    if (viewMode !== 'sidebar') return;
+
+    const activeFolder = document.querySelector('.archive-folder-active');
+    if (activeFolder) {
+      const timer = setTimeout(() => {
+        activeFolder.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+      }, 120);
+      return () => clearTimeout(timer);
+    }
+  }, [activePage, activeProjectId, viewMode]);
+
+  const buildContentBlocks = async (formData, folder) => Promise.all(formData.blocks.map(async (b) => ({
+    type: b.type,
+    value: b.value,
+    language: b.language,
+    url: b.type === 'image' ? await uploadImage(b.file, folder) : undefined,
+    caption: b.type === 'image' ? b.value : undefined,
+    defaultCode: b.type === 'playground' ? b.value : undefined
+  })));
+
+  const handleSaveNewData = async (formData) => {
+    if (formData.recordType === 'document') {
+      const newPageId = formData.pageTitle.toLowerCase().replace(/[^a-z0-9]+/g, '_');
+      const content = await buildContentBlocks(formData, `${activeProjectId}/${newPageId}`);
+      setProjects((prev) => {
+        const next = { ...prev };
+        const project = { ...next[activeProjectId] };
+        const docs = { ...project.docs };
+        docs[newPageId] = {
+          title: formData.pageTitle.toUpperCase(),
+          subtitle: formData.version.toUpperCase(),
+          content
+        };
+        project.docs = docs;
+        next[activeProjectId] = project;
+        return next;
+      });
+      setActivePage(newPageId);
+      setIsAddingData(false);
+      setIsExpanded(false);
+    } else {
+      const newId = formData.projectName.toLowerCase().replace(/\s+/g, '-');
+      const content = await buildContentBlocks(formData, `${newId}/index`);
+      setProjects((prev) => {
+        const next = { ...prev };
+        next[newId] = {
+          id: newId, 
+          name: formData.projectName.toUpperCase(), 
+          version: formData.version,
+          docs: {
+            index: {
+              title: formData.pageTitle.toUpperCase(), 
+              subtitle: "CODE_000 // INIT",
+              content
+            }
+          }
+        };
+        return next;
+      });
+      setActiveProjectId(newId);
+      setActivePage('index');
+      setIsAddingData(false);
+      setIsExpanded(false);
+    }
+  };
+
+  const renderContent = (block, index) => {
+    switch (block.type) {
+      case 'text':
+        return <p key={index} className="font-mono-tech leading-relaxed mb-6" style={{ opacity: 0.85, fontSize: '14px' }}>{block.value}</p>;
+      case 'heading':
+        return <h2 key={index} className="font-serif font-bold mt-14 mb-6 pb-2 inline-block" style={{ fontSize: 'clamp(1.5rem, 3vw, 2.2rem)', borderBottom: '2px solid currentColor' }}>{block.value}</h2>;
+      case 'code':
+        return <CodeBlock key={index} language={block.language} code={block.value} />;
+      case 'demo-input':
+        return <InteractiveInputDemo key={index} />;
+      case 'image':
+        return (
+          <figure key={index} className="my-10 p-2" style={{ border: '1px solid rgba(255,255,255,0.1)', background: '#0d0d0e' }}>
+            <img src={block.url} alt="Reference" className="w-full h-auto" style={{ filter: 'grayscale(0.8) contrast(1.15) brightness(0.85)' }} />
+            {block.caption && <figcaption className="font-mono-tech uppercase mt-2" style={{ fontSize: '9px', color: '#888' }}>{block.caption}</figcaption>}
+          </figure>
+        );
+      case 'list':
+        return (
+          <ul key={index} className="font-mono-tech pl-6 mb-6 space-y-3" style={{ listStyleType: 'square', opacity: 0.85, fontSize: '13px' }}>
+            {block.items.map((item, i) => <li key={i}>{item}</li>)}
+          </ul>
+        );
+      case 'playground':
+        return <LiveRunner key={index} defaultCode={block.defaultCode} />;
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <div className="h-screen w-screen relative vignette grain" style={{ background: '#0a0a0b', overflow: 'hidden' }}>
+      
+      {viewMode === 'cabinet' ? (
+        <CabinetLayout
+          projects={projects}
+          activeProjectId={activeProjectId}
+          setActiveProjectId={setActiveProjectId}
+          activePage={activePage}
+          setActivePage={setActivePage}
+          isAddingData={isAddingData}
+          setIsAddingData={setIsAddingData}
+          isExpanded={isExpanded}
+          setIsExpanded={setIsExpanded}
+          viewMode={viewMode}
+          setViewMode={setViewMode}
+          contentRef={contentRef}
+          activeProject={activeProject}
+          pageKeys={pageKeys}
+          prevPageKey={prevPageKey}
+          nextPageKey={nextPageKey}
+          activeTheme={activeTheme}
+          PALETTE={PALETTE}
+          scrollToTop={scrollToTop}
+          handleSaveNewData={handleSaveNewData}
+          renderContent={renderContent}
+        />
+      ) : (
+        <SidebarLayout
+          projects={projects}
+          activeProjectId={activeProjectId}
+          setActiveProjectId={setActiveProjectId}
+          activePage={activePage}
+          setActivePage={setActivePage}
+          isAddingData={isAddingData}
+          setIsAddingData={setIsAddingData}
+          viewMode={viewMode}
+          setViewMode={setViewMode}
+          activeProject={activeProject}
+          pageKeys={pageKeys}
+          prevPageKey={prevPageKey}
+          nextPageKey={nextPageKey}
+          activeTheme={activeTheme}
+          PALETTE={PALETTE}
+          scrollToTop={scrollToTop}
+          currentPageData={currentPageData}
+          handleSaveNewData={handleSaveNewData}
+          renderContent={renderContent}
+        />
+      )}
+
+      {/* --- Bottom Info Bar --- */}
+      {viewMode === 'cabinet' && (
+        <footer
+          className="fixed bottom-0 left-0 right-0 z-20 flex items-center justify-between px-6 py-2 border-t"
+          style={{
+            borderColor: 'rgba(255,255,255,0.06)',
+            background: '#0d0d0e',
+            color: '#888',
+          }}
+        >
+          <span className="font-display font-bold uppercase" style={{ fontSize: '10px', letterSpacing: '0.05em' }}>
+            GRID DAILY_{activeProject.version}
+          </span>
+          <span className="font-mono-tech hidden md:block" style={{ fontSize: '8px', opacity: 0.4, letterSpacing: '0.05em' }}>
+            Visual Studies &middot; Type &middot; Image &middot; Emotion
+          </span>
+          <span className="font-mono-tech" style={{ fontSize: '8px', opacity: 0.35 }}>
+            FILE_{String(pageKeys.length).padStart(2, '0')}//
+          </span>
+        </footer>
+      )}
+      
+    </div>
+  );
+}

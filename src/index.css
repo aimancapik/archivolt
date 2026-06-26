@@ -1,0 +1,524 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syncopate:wght@400;700&family=DM+Serif+Display:ital@0;1&display=swap');
+
+@import "tailwindcss";
+
+/* === BASE === */
+*, *::before, *::after { box-sizing: border-box; }
+body { margin: 0; overflow: hidden; background: #0a0a0b; }
+
+/* === TYPOGRAPHY === */
+.font-mono-tech { font-family: 'Space Mono', monospace; }
+.font-display { font-family: 'Syncopate', sans-serif; letter-spacing: -0.05em; }
+.font-serif { font-family: 'DM Serif Display', serif; letter-spacing: -0.02em; }
+
+/* === GRAIN / NOISE TEXTURE === */
+.grain { position: relative; }
+.grain::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+  opacity: 0.1;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* === VIGNETTE === */
+.vignette::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 3;
+  background: radial-gradient(ellipse at center, transparent 35%, rgba(0,0,0,0.55) 100%);
+}
+
+/* === ARCHIVE CABINET (PINTEREST CABINET STYLE) === */
+.archive-cabinet {
+  display: flex;
+  flex-direction: row;
+  gap: 6px;
+  width: 100%;
+  min-height: 680px;
+  height: 680px;
+  align-items: stretch;
+  isolation: isolate;
+  background: rgba(0, 0, 0, 0.15);
+  padding: 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.archive-folder {
+  display: flex;
+  flex-direction: row;
+  border-width: 1px;
+  border-style: solid;
+  border-radius: 12px;
+  overflow: hidden;
+  transition: flex 0.45s cubic-bezier(0.25, 1, 0.3, 1), opacity 0.4s ease, border-width 0.4s ease, box-shadow 0.3s ease, filter 0.3s ease;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  position: relative;
+}
+
+.archive-folder-inactive {
+  flex: 0 0 76px;
+  cursor: pointer;
+}
+
+.archive-folder-inactive:hover {
+  filter: brightness(1.08) saturate(1.05);
+  box-shadow: 0 14px 35px rgba(0, 0, 0, 0.25);
+}
+
+.archive-folder-active {
+  flex: 1 1 0%;
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.4);
+}
+
+/* Expanded state - hide inactive folders */
+.archive-cabinet-expanded .archive-folder-inactive {
+  flex: 0 0 0px !important;
+  width: 0 !important;
+  min-width: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border-width: 0 !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* Folder tab styling on the left edge */
+.folder-tab {
+  width: 76px;
+  min-width: 76px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  padding: 28px 0;
+  border-right: 1px solid rgba(0, 0, 0, 0.12);
+  background: linear-gradient(180deg, rgba(0,0,0,0.04) 0%, rgba(0,0,0,0.1) 100%);
+  user-select: none;
+  position: relative;
+  transition: background 0.3s ease;
+}
+
+.archive-folder-inactive:hover .folder-tab {
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.folder-tab-badge {
+  font-family: 'Space Mono', monospace;
+  font-size: 12px;
+  font-weight: 700;
+  opacity: 0.75;
+  margin-bottom: 16px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  letter-spacing: 0.05em;
+}
+
+.folder-tab-title {
+  font-family: 'Space Mono', monospace;
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  writing-mode: vertical-rl;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) rotate(180deg);
+  white-space: nowrap;
+  opacity: 0.95;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  line-height: 1.4;
+  transition: opacity 0.3s ease, text-shadow 0.3s ease;
+}
+
+.archive-folder-inactive:hover .folder-tab-title {
+  opacity: 1;
+  text-shadow: 0 1px 6px rgba(255, 255, 255, 0.15), 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.archive-folder-inactive:hover .folder-tab-badge {
+  opacity: 1;
+}
+
+.folder-tab-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-top: 24px;
+}
+
+.folder-tab-barcode {
+  writing-mode: vertical-rl;
+  height: 35px;
+  width: 12px;
+  background: repeating-linear-gradient(
+    to bottom,
+    currentColor, currentColor 1px,
+    transparent 1px, transparent 2px,
+    currentColor 2px, currentColor 3.5px,
+    transparent 3.5px, transparent 5px
+  );
+  opacity: 0.4;
+}
+
+/* Folder inner content area */
+.folder-body {
+  flex: 1;
+  min-width: 0;
+  padding: 24px;
+  overflow-y: auto;
+  opacity: 0;
+  display: none;
+  transition: opacity 0.4s ease, padding 0.3s ease;
+}
+
+.archive-folder-active .folder-body {
+  display: block;
+  opacity: 1;
+}
+
+.archive-cabinet-expanded .folder-body {
+  padding: 40px;
+}
+
+/* Mobile responsiveness */
+@media (max-width: 768px) {
+  .archive-cabinet {
+    flex-direction: column;
+    min-height: auto;
+    gap: 12px;
+    padding: 8px;
+  }
+
+  .archive-folder {
+    flex-direction: column;
+    min-height: auto;
+    transition: max-height 0.5s cubic-bezier(0.25, 1, 0.3, 1), box-shadow 0.3s ease;
+  }
+
+  .archive-folder-inactive {
+    flex: 0 0 auto;
+    max-height: 52px;
+  }
+
+  .archive-folder-active {
+    flex: 1 1 auto;
+    max-height: 3000px;
+  }
+
+  .folder-tab {
+    width: 100%;
+    min-width: auto;
+    height: 52px;
+    flex-direction: row;
+    padding: 0 20px;
+    border-right: none;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .folder-tab-badge {
+    margin-bottom: 0;
+  }
+
+  .folder-tab-title {
+    position: static;
+    writing-mode: horizontal-tb;
+    transform: none;
+    margin: 0;
+    font-size: 13px;
+  }
+
+  .folder-tab-meta {
+    margin-top: 0;
+    flex-direction: row;
+    gap: 12px;
+  }
+
+  .folder-tab-barcode {
+    writing-mode: horizontal-tb;
+    height: 12px;
+    width: 35px;
+    background: repeating-linear-gradient(
+      to right,
+      currentColor, currentColor 1px,
+      transparent 1px, transparent 2px,
+      currentColor 2px, currentColor 3.5px,
+      transparent 3.5px, transparent 5px
+    );
+  }
+
+  .folder-body {
+    padding: 24px 16px 32px;
+  }
+}
+
+/* === DECORATIVE PATTERNS === */
+.pattern-dither {
+  background-image: url("data:image/svg+xml,%3Csvg width='4' height='4' viewBox='0 0 4 4' xmlns='http://www.w3.org/2000/svg'%3E%3Crect x='0' y='0' width='1' height='1' fill='currentColor' opacity='0.3'/%3E%3Crect x='2' y='2' width='1' height='1' fill='currentColor' opacity='0.3'/%3E%3C/svg%3E");
+  background-size: 4px 4px;
+}
+.pattern-lines {
+  background-image: repeating-linear-gradient(0deg, currentColor 0px, currentColor 1px, transparent 1px, transparent 5px);
+  opacity: 0.15;
+}
+.pattern-dots {
+  background-image: radial-gradient(circle, currentColor 0.6px, transparent 0.6px);
+  background-size: 5px 5px;
+  opacity: 0.15;
+}
+.pattern-cross {
+  background-image: linear-gradient(currentColor 1px, transparent 1px), linear-gradient(90deg, currentColor 1px, transparent 1px);
+  background-size: 8px 8px;
+  opacity: 0.1;
+}
+
+/* === BARCODE === */
+.barcode {
+  background: repeating-linear-gradient(
+    to right,
+    currentColor, currentColor 1.5px,
+    transparent 1.5px, transparent 3px,
+    currentColor 3px, currentColor 4px,
+    transparent 4px, transparent 6px,
+    currentColor 6px, currentColor 6.5px,
+    transparent 6.5px, transparent 9px
+  );
+  height: 20px;
+  width: 32px;
+  opacity: 0.5;
+}
+
+/* === SCANLINE OVERLAY === */
+.scanline { position: relative; }
+.scanline::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  background: repeating-linear-gradient(
+    to bottom, transparent, transparent 2px, rgba(0,0,0,0.015) 2px, rgba(0,0,0,0.015) 4px
+  );
+}
+
+/* === CUSTOM SCROLLBAR === */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.22); }
+
+/* === ANIMATIONS === */
+@keyframes flicker {
+  0%, 90%, 94%, 98%, 100% { opacity: 1; }
+  91% { opacity: 0.85; }
+  95% { opacity: 0.9; }
+}
+@keyframes pulse-accent {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in {
+  animation: fade-in 0.4s ease-out forwards;
+}
+
+/* === PIXEL BLOCK DECORATION === */
+.pixel-block {
+  position: relative;
+  overflow: hidden;
+}
+.pixel-block::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(45deg, currentColor 25%, transparent 25%),
+    linear-gradient(-45deg, currentColor 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, currentColor 75%),
+    linear-gradient(-45deg, transparent 75%, currentColor 75%);
+  background-size: 4px 4px;
+  background-position: 0 0, 0 2px, 2px -2px, -2px 0;
+  opacity: 0.2;
+}
+
+/* === RETRO TOGGLE SWITCH / BUTTON GROUP === */
+.retro-toggle-group {
+  display: flex;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  overflow: hidden;
+  max-width: fit-content;
+}
+.retro-toggle-btn {
+  padding: 6px 16px;
+  font-family: 'Space Mono', monospace;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+  border: none;
+}
+
+/* === EXPAND / COLLAPSE BUTTON === */
+.expand-toggle-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  border: 1px solid currentColor;
+  background: transparent;
+  color: inherit;
+  border-radius: 4px;
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity 0.2s, background 0.2s;
+}
+.expand-toggle-btn:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+/* === PLAYGROUND EXECUTE BUTTON === */
+.runner-execute-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  font-family: 'Space Mono', monospace;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  background: #e4decd;
+  color: #111;
+  border: 1px solid #111;
+  border-radius: 4px;
+  cursor: pointer;
+  box-shadow: 2px 2px 0px rgba(0, 0, 0, 1);
+  transition: transform 0.1s ease, box-shadow 0.1s ease, background-color 0.15s ease;
+  user-select: none;
+}
+
+.runner-execute-btn:hover {
+  background: #f0ebd9;
+  transform: translate(-1px, -1px);
+  box-shadow: 3px 3px 0px rgba(0, 0, 0, 1);
+}
+
+.runner-execute-btn:active {
+  background: #c3baa2;
+  transform: translate(1px, 1px);
+  box-shadow: 1px 1px 0px rgba(0, 0, 0, 1);
+}
+
+/* === DYNAMIC BLOCK EDITOR === */
+.block-editor-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+}
+
+.block-editor-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease, opacity 0.2s ease, border-color 0.2s ease;
+  position: relative;
+}
+
+.block-editor-item.dragging {
+  opacity: 0.45;
+  border-style: dashed;
+  border-color: currentColor;
+  transform: scale(0.98);
+}
+
+.block-drag-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 4px;
+  cursor: grab;
+  color: inherit;
+  opacity: 0.4;
+  transition: opacity 0.2s;
+}
+
+.block-drag-handle:hover {
+  opacity: 0.8;
+}
+
+.block-drag-handle:active {
+  cursor: grabbing;
+}
+
+.block-action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: transparent;
+  color: inherit;
+  border-radius: 4px;
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity 0.2s, background 0.2s, transform 0.1s;
+}
+
+.block-action-btn:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.block-action-btn:active {
+  transform: scale(0.95);
+}
+
+/* === VERTICAL WRITING HELPER === */
+.writing-vertical {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+}
+
+/* === BG NOISE ALIAS FOR RETRO SIDEBAR VIEW === */
+.bg-noise {
+  position: relative;
+}
+.bg-noise::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 50;
+  opacity: 0.25;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+}
+
+/* === HIDE SCROLLBAR FOR MODERN LAYOUTS === */
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
