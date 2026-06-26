@@ -48,10 +48,10 @@ export const uploadImage = async (file, folder = 'uploads') => {
 };
 
 export const removeImageBackground = async (file) => {
-  const removeBackground = (await import('@imgly/background-removal')).default;
+  const { removeBackground } = await import('@imgly/background-removal');
   const blob = await removeBackground(file, {
     model: 'isnet_quint8',
-    output: { format: 'image/png', quality: 0.8, type: 'foreground' }
+    output: { format: 'image/png', quality: 0.8 }
   });
 
   return new File([blob], `${file.name.replace(/\.[^.]+$/, '') || 'sticker'}-sticker.png`, { type: 'image/png' });
