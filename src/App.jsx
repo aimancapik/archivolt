@@ -373,7 +373,7 @@ export default function App() {
               left: `${block.x || 0}px`,
               top: `${block.y || 0}px`,
               width: `${block.width || 180}px`,
-              transform: `rotate(${block.rotation || 0}deg)`,
+              transform: `translate(-50%, -50%) rotate(${block.rotation || 0}deg)`,
             }}
           />
         );
