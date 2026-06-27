@@ -5,6 +5,7 @@ import { LiveRunner } from './components/LiveRunner';
 import { SidebarLayout } from './layouts/SidebarLayout';
 import { isSupabaseConfigured } from './lib/supabase';
 import { loadRemoteProjects, saveRemoteProjects, uploadImage } from './lib/archiveStore';
+import { checklistItemsFromText } from './utils/checklist';
 import { normalizeSticker, stickerPlacementStyle } from './utils/stickerPlacement';
 
 const STORAGE_KEY = 'archivolt.projects';
@@ -242,6 +243,10 @@ export default function App() {
       block.items = b.value.split('\n').map((item) => item.trim()).filter(Boolean);
     }
 
+    if (b.type === 'checklist') {
+      block.items = checklistItemsFromText(b.value);
+    }
+
     return block;
   }));
 
@@ -355,7 +360,23 @@ export default function App() {
     setIsEditingData(false);
   };
 
-  const renderContent = (block, index) => {
+  const toggleChecklistItem = (blockIndex, itemIndex) => {
+    if (!currentPageData?.content?.[blockIndex] || currentPageData.content[blockIndex].type !== 'checklist') return;
+    setProjects((prev) => {
+      const next = { ...prev };
+      const project = { ...next[activeProjectId] };
+      const doc = { ...project.docs[activePage] };
+      doc.content = doc.content.map((block, index) => index === blockIndex ? {
+        ...block,
+        items: (block.items || []).map((item, checklistIndex) => checklistIndex === itemIndex ? { ...item, checked: !item.checked } : item)
+      } : block);
+      project.docs = { ...project.docs, [activePage]: doc };
+      next[activeProjectId] = project;
+      return next;
+    });
+  };
+
+  const renderContent = (block, index, { interactive = false } = {}) => {
     switch (block.type) {
       case 'text':
         return <p key={index} className="font-mono-tech leading-relaxed mb-6" style={{ opacity: 0.85, fontSize: '14px' }}>{block.value}</p>;
@@ -397,6 +418,32 @@ export default function App() {
         return (
           <ul key={index} className="font-mono-tech pl-6 mb-6 space-y-3" style={{ listStyleType: 'square', opacity: 0.85, fontSize: '13px' }}>
             {(block.items || []).map((item, i) => <li key={i}>{item}</li>)}
+          </ul>
+        );
+      case 'checklist':
+        return (
+          <ul key={index} className="font-mono-tech mb-6 space-y-2" style={{ opacity: 0.92, fontSize: '13px' }}>
+            {(block.items || []).map((item, i) => (
+              <li key={i}>
+                <label
+                  className="flex items-start gap-3 p-3 transition-colors cursor-pointer"
+                  style={{
+                    border: `1px solid ${item.checked ? 'rgba(40,200,64,0.35)' : activeTheme.borderColor}`,
+                    background: item.checked ? 'rgba(40,200,64,0.08)' : 'rgba(0,0,0,0.08)',
+                    borderRadius: '6px'
+                  }}
+                >
+                <input
+                  type="checkbox"
+                  checked={item.checked}
+                  readOnly={!interactive}
+                  onChange={() => interactive && toggleChecklistItem(index, i)}
+                  className="mt-0.5 h-4 w-4 accent-current cursor-pointer"
+                />
+                  <span style={{ textDecoration: item.checked ? 'line-through' : 'none', opacity: item.checked ? 0.65 : 1 }}>{item.text}</span>
+                </label>
+              </li>
+            ))}
           </ul>
         );
       case 'playground':

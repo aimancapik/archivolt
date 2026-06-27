@@ -251,7 +251,7 @@ export const SidebarLayout = ({
 
                 {/* Page Content */}
                 <div className="mt-12 md:mt-0 relative z-10 animate-fade-in">
-                  {currentPageData?.content.map((block, index) => renderContent(block, index))}
+                  {currentPageData?.content.map((block, index) => renderContent(block, index, { interactive: true }))}
                 </div>
 
                 {/* Brutalist Pagination Footer */}

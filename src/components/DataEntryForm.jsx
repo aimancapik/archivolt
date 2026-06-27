@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { X, GripVertical, Trash2, Save, Plus, Image, ChevronUp, ChevronDown, RotateCcw, Upload, FileText, Copy, Check } from 'lucide-react';
 import { cn } from '../utils/helpers';
+import { checklistItemsFromText, checklistTextFromItems } from '../utils/checklist';
 import { markdownToBlocks } from '../utils/markdownToBlocks';
 import { normalizeSticker, pointerToStickerPoint, stickerPlacementStyle } from '../utils/stickerPlacement';
 
@@ -17,10 +18,11 @@ const stickerFromContent = (sticker, index) => {
 
 const blockFromContent = (block, index) => {
   const stickers = block.type === 'stickers' ? (block.items || []).map(stickerFromContent) : block.type === 'sticker' ? [stickerFromContent(block, 0)] : [];
+  const value = block.type === 'list' ? (block.items || []).join('\n') : block.type === 'checklist' ? checklistTextFromItems(block.items) : block.caption || block.value || block.defaultCode || '';
   return {
     id: `${Date.now()}-${index}`,
     type: block.type === 'sticker' ? 'stickers' : block.type,
-    value: block.type === 'list' ? (block.items || []).join('\n') : block.caption || block.value || block.defaultCode || '',
+    value,
     language: block.language,
     url: block.url,
     x: block.x || 0,
@@ -54,6 +56,12 @@ const formSignature = ({ recordType, projectName, version, pageTitle, blocks }) 
 const previewBlockForRender = (block) => {
   if (block.type === 'list') {
     return { ...block, items: block.value.split('\n').map((item) => item.trim()).filter(Boolean) };
+  }
+  if (block.type === 'checklist') {
+    return {
+      ...block,
+      items: checklistItemsFromText(block.value)
+    };
   }
   if (block.type === 'image') {
     return { ...block, url: block.previewUrl || block.url, caption: block.value };
@@ -162,6 +170,9 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
     if (type === 'list') {
       defaultVal = 'First item\nSecond item';
     }
+    if (type === 'checklist') {
+      defaultVal = '[ ] ';
+    }
     const newBlock = {
       id: `${Date.now()}${Math.random().toString(36).substr(2, 5)}`,
       type,
@@ -212,6 +223,14 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
     setBlocks((prev) =>
       prev.map((b) => (b.id === id ? { ...b, language: lang } : b))
     );
+  };
+
+  const updateChecklistItems = (id, updater) => {
+    setBlocks((prev) => prev.map((b) => {
+      if (b.id !== id) return b;
+      const items = updater(checklistItemsFromText(b.value, { keepEmpty: true }));
+      return { ...b, value: checklistTextFromItems(items) };
+    }));
   };
 
   const updateBlockFile = (id, file) => {
@@ -590,6 +609,60 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
                       </div>
                     )}
 
+                    {block.type === 'checklist' && (
+                      <div>
+                        <label className="font-mono-tech block text-[9px] uppercase opacity-45 mb-2">CHECKLIST ITEMS</label>
+                        <div className="space-y-2">
+                          {checklistItemsFromText(block.value, { keepEmpty: true }).map((item, itemIndex) => (
+                            <div
+                              key={itemIndex}
+                              className="flex items-center gap-2 p-2"
+                              style={{
+                                border: `1px solid ${item.checked ? 'rgba(40,200,64,0.35)' : theme.borderColor}`,
+                                background: item.checked ? 'rgba(40,200,64,0.08)' : 'rgba(0,0,0,0.08)',
+                                borderRadius: '6px'
+                              }}
+                            >
+                              <button
+                                type="button"
+                                onClick={() => updateChecklistItems(block.id, (items) => items.map((nextItem, index) => index === itemIndex ? { ...nextItem, checked: !nextItem.checked } : nextItem))}
+                                className="grid h-8 w-8 shrink-0 place-items-center border font-mono-tech text-xs cursor-pointer transition-colors"
+                                style={{ borderColor: item.checked ? '#28c840' : theme.borderColor, color: theme.textColor, background: item.checked ? '#28c840' : 'transparent' }}
+                                aria-label={item.checked ? 'Mark checklist item incomplete' : 'Mark checklist item complete'}
+                              >
+                                <span style={{ color: item.checked ? '#111' : theme.textColor }}>{item.checked ? 'X' : ''}</span>
+                              </button>
+                              <input
+                                type="text"
+                                value={item.text}
+                                onChange={(e) => updateChecklistItems(block.id, (items) => items.map((nextItem, index) => index === itemIndex ? { ...nextItem, text: e.target.value } : nextItem))}
+                                className="min-w-0 flex-1 p-2 bg-transparent font-mono-tech focus:outline-none"
+                                style={{ borderBottom: `1px solid ${theme.borderColor}`, fontSize: '13px', color: 'inherit', textDecoration: item.checked ? 'line-through' : 'none', opacity: item.checked ? 0.6 : 1 }}
+                                placeholder="Checklist item..."
+                              />
+                              <button
+                                type="button"
+                                onClick={() => updateChecklistItems(block.id, (items) => items.filter((_, index) => index !== itemIndex))}
+                                className="block-action-btn cursor-pointer"
+                                style={{ color: '#ff5f57', borderColor: 'rgba(255,95,87,0.3)' }}
+                                aria-label="Remove checklist item"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => updateChecklistItems(block.id, (items) => [...items, { checked: false, text: '' }])}
+                          className="mt-3 px-3 py-2 border font-mono-tech text-[10px] uppercase cursor-pointer hover:bg-[rgba(255,255,255,0.05)] transition-colors flex items-center gap-1.5"
+                          style={{ borderColor: theme.textColor, color: theme.textColor, borderRadius: '4px', background: 'transparent' }}
+                        >
+                          <Plus className="w-3.5 h-3.5" /> Add Item
+                        </button>
+                      </div>
+                    )}
+
                     {block.type === 'image' && (
                       <div>
                         <label className="font-mono-tech block text-[9px] uppercase opacity-45 mb-1">IMAGE</label>
@@ -844,6 +917,14 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
                 style={{ borderColor: theme.textColor, color: theme.textColor, borderRadius: '4px', background: 'transparent' }}
               >
                 <Plus className="w-3.5 h-3.5" /> LIST
+              </button>
+              <button
+                type="button"
+                onClick={() => addBlock('checklist')}
+                className="px-4 py-2 border font-mono-tech text-xs cursor-pointer hover:bg-[rgba(255,255,255,0.05)] transition-colors flex items-center gap-1.5"
+                style={{ borderColor: theme.textColor, color: theme.textColor, borderRadius: '4px', background: 'transparent' }}
+              >
+                <Plus className="w-3.5 h-3.5" /> CHECKLIST
               </button>
               <button
                 type="button"

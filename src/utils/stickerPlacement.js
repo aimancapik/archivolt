@@ -1,5 +1,6 @@
 const LEGACY_WIDTH = 800;
 const LEGACY_HEIGHT = 600;
+const STICKER_STAGE_HEIGHT = 720;
 
 const clamp = (value, min = 0, max = 100) => Math.min(max, Math.max(min, value));
 const round = (value) => Number(value.toFixed(2));
@@ -30,7 +31,7 @@ export const stickerPlacementStyle = (sticker) => {
 
   return {
     left: `${x}%`,
-    top: `${y}%`,
+    top: `${round((y / 100) * STICKER_STAGE_HEIGHT)}px`,
     width: `${width}%`,
     transform: `translate(-50%, -50%) rotate(${rotation}deg)`
   };
@@ -38,9 +39,10 @@ export const stickerPlacementStyle = (sticker) => {
 
 export const pointerToStickerPoint = (clientX, clientY, rect) => {
   if (!rect.width || !rect.height) return { x: 0, y: 0 };
+  const height = Math.min(rect.height, STICKER_STAGE_HEIGHT);
 
   return {
     x: round(clamp(((clientX - rect.left) / rect.width) * 100)),
-    y: round(clamp(((clientY - rect.top) / rect.height) * 100))
+    y: round(clamp(((clientY - rect.top) / height) * 100))
   };
 };
