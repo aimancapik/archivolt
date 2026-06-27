@@ -439,43 +439,6 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
 
         {/* Dynamic Blocks Section */}
         <div className="space-y-3">
-          <div className="space-y-2">
-            <label className="font-mono-tech uppercase font-bold block" style={{ fontSize: '9px', letterSpacing: '0.12em' }}>IMPORT_MARKDOWN</label>
-            <textarea
-              value={markdownInput}
-              onChange={(e) => setMarkdownInput(e.target.value)}
-              className="w-full p-3 bg-transparent font-mono-tech focus:outline-none resize-y"
-              style={{ border: `1px dashed ${theme.textColor}`, fontSize: '12px', minHeight: '110px', color: 'inherit' }}
-              placeholder={"# Function Name\nPaste AI-generated Markdown here..."}
-            />
-            <div className="flex flex-wrap gap-3">
-              <button
-                type="button"
-                onClick={copyArchivoltPrompt}
-                className="px-4 py-2 border font-mono-tech text-xs cursor-pointer hover:bg-[rgba(255,255,255,0.05)] transition-colors flex items-center gap-1.5"
-                style={{ borderColor: theme.borderColor, color: theme.textColor, borderRadius: '4px', background: 'transparent' }}
-              >
-                {promptCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />} {promptCopied ? 'COPIED PROMPT' : 'COPY PROMPT'}
-              </button>
-              <button
-                type="button"
-                onClick={importMarkdown}
-                className="px-4 py-2 border font-mono-tech text-xs cursor-pointer hover:bg-[rgba(255,255,255,0.05)] transition-colors flex items-center gap-1.5"
-                style={{ borderColor: theme.textColor, color: theme.textColor, borderRadius: '4px', background: 'transparent' }}
-              >
-                <FileText className="w-3.5 h-3.5" /> IMPORT MARKDOWN
-              </button>
-              <button
-                type="button"
-                onClick={() => setMarkdownInput('')}
-                className="px-4 py-2 border font-mono-tech text-xs cursor-pointer hover:bg-[rgba(255,255,255,0.05)] transition-colors"
-                style={{ borderColor: theme.borderColor, color: theme.textColor, borderRadius: '4px', background: 'transparent' }}
-              >
-                CLEAR
-              </button>
-            </div>
-          </div>
-
           <label className="font-mono-tech uppercase font-bold block" style={{ fontSize: '9px', letterSpacing: '0.12em' }}>DOCUMENT_STRUCTURE (DRAG TO REORDER)</label>
           
           <div className="block-editor-list">
@@ -944,6 +907,43 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
                   <Image className="w-3.5 h-3.5" /> STICKERS
                 </button>
               )}
+            </div>
+          </div>
+
+          <div className="space-y-2 pt-4 border-t border-dashed" style={{ borderColor: 'rgba(255,255,255,0.1)' }}>
+            <label className="font-mono-tech uppercase font-bold block" style={{ fontSize: '9px', letterSpacing: '0.12em' }}>IMPORT_MARKDOWN</label>
+            <textarea
+              value={markdownInput}
+              onChange={(e) => setMarkdownInput(e.target.value)}
+              className="w-full p-3 bg-transparent font-mono-tech focus:outline-none resize-y"
+              style={{ border: `1px dashed ${theme.textColor}`, fontSize: '12px', minHeight: '110px', color: 'inherit' }}
+              placeholder={"# Function Name\nPaste AI-generated Markdown here..."}
+            />
+            <div className="flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={copyArchivoltPrompt}
+                className="px-4 py-2 border font-mono-tech text-xs cursor-pointer hover:bg-[rgba(255,255,255,0.05)] transition-colors flex items-center gap-1.5"
+                style={{ borderColor: theme.borderColor, color: theme.textColor, borderRadius: '4px', background: 'transparent' }}
+              >
+                {promptCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />} {promptCopied ? 'COPIED PROMPT' : 'COPY PROMPT'}
+              </button>
+              <button
+                type="button"
+                onClick={importMarkdown}
+                className="px-4 py-2 border font-mono-tech text-xs cursor-pointer hover:bg-[rgba(255,255,255,0.05)] transition-colors flex items-center gap-1.5"
+                style={{ borderColor: theme.textColor, color: theme.textColor, borderRadius: '4px', background: 'transparent' }}
+              >
+                <FileText className="w-3.5 h-3.5" /> IMPORT MARKDOWN
+              </button>
+              <button
+                type="button"
+                onClick={() => setMarkdownInput('')}
+                className="px-4 py-2 border font-mono-tech text-xs cursor-pointer hover:bg-[rgba(255,255,255,0.05)] transition-colors"
+                style={{ borderColor: theme.borderColor, color: theme.textColor, borderRadius: '4px', background: 'transparent' }}
+              >
+                CLEAR
+              </button>
             </div>
           </div>
         </div>
