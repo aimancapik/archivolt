@@ -6,6 +6,7 @@ import { SidebarLayout } from './layouts/SidebarLayout';
 import { isSupabaseConfigured } from './lib/supabase';
 import { loadRemoteProjects, saveRemoteProjects, uploadImage } from './lib/archiveStore';
 import { checklistItemsFromText } from './utils/checklist';
+import { orderedPageKeys } from './utils/pageOrder';
 import { normalizeSticker, stickerPlacementStyle } from './utils/stickerPlacement';
 
 const STORAGE_KEY = 'archivolt.projects';
@@ -183,7 +184,7 @@ export default function App() {
   const activeProject = projects[activeProjectId];
   const hasProjects = Object.keys(projects).length > 0;
 
-  const pageKeys = activeProject ? Object.keys(activeProject.docs) : [];
+  const pageKeys = activeProject ? orderedPageKeys(activeProject.docs) : [];
   const currentIndex = pageKeys.indexOf(activePage);
   const prevPageKey = currentIndex > 0 ? pageKeys[currentIndex - 1] : null;
   const nextPageKey = currentIndex < pageKeys.length - 1 ? pageKeys[currentIndex + 1] : null;
@@ -362,6 +363,23 @@ export default function App() {
     setIsEditingData(false);
   };
 
+  const handleTogglePinDocument = () => {
+    if (!activeProject?.docs?.[activePage]) return;
+    setProjects((prev) => {
+      const next = { ...prev };
+      const project = { ...next[activeProjectId] };
+      project.docs = {
+        ...project.docs,
+        [activePage]: {
+          ...project.docs[activePage],
+          pinned: !project.docs[activePage].pinned
+        }
+      };
+      next[activeProjectId] = project;
+      return next;
+    });
+  };
+
   const toggleChecklistItem = (blockIndex, itemIndex) => {
     if (!currentPageData?.content?.[blockIndex] || currentPageData.content[blockIndex].type !== 'checklist') return;
     setProjects((prev) => {
@@ -402,7 +420,7 @@ export default function App() {
             key={index}
             src={block.url}
             alt=""
-            className="pointer-events-none absolute z-20"
+            className="pointer-events-none absolute z-40"
             style={stickerPlacementStyle(block)}
           />
         );
@@ -412,7 +430,7 @@ export default function App() {
             key={`${index}-${sticker.id || stickerIndex}`}
             src={sticker.url}
             alt=""
-            className="pointer-events-none absolute z-20"
+            className="pointer-events-none absolute z-40"
             style={stickerPlacementStyle(sticker)}
           />
         ));
@@ -479,6 +497,8 @@ export default function App() {
           handleUpdateDocument={handleUpdateDocument}
           handleDeleteDocument={handleDeleteDocument}
           handleDeleteProject={handleDeleteProject}
+          handleTogglePinDocument={handleTogglePinDocument}
+          orderedPageKeys={orderedPageKeys}
           renderContent={renderContent}
         />
       ) : (

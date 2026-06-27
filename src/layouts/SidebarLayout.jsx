@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { Plus, ArrowLeft, ArrowRight, ChevronDown, Edit3, Trash2, Settings } from 'lucide-react';
+import { Plus, ArrowLeft, ArrowRight, ChevronDown, Edit3, Trash2, Settings, Pin } from 'lucide-react';
 import { DataEntryForm } from '../components/DataEntryForm';
 
 export const SidebarLayout = ({
@@ -23,6 +23,8 @@ export const SidebarLayout = ({
   handleUpdateDocument,
   handleDeleteDocument,
   handleDeleteProject,
+  handleTogglePinDocument,
+  orderedPageKeys,
   renderContent
 }) => {
   const [showProjectSettings, setShowProjectSettings] = useState(false);
@@ -88,6 +90,9 @@ export const SidebarLayout = ({
                 <span className="writing-vertical font-display text-xs md:text-sm font-bold tracking-widest whitespace-normal text-center leading-tight max-h-[136px] [overflow-wrap:anywhere]">
                   {doc.title}
                 </span>
+                {doc.pinned && (
+                  <Pin className="absolute bottom-3 left-3 h-3.5 w-3.5 opacity-60" />
+                )}
                 
                 {isActive && (
                   <div className="absolute top-4 right-2 writing-vertical text-[8px] font-mono-tech opacity-50">
@@ -122,7 +127,7 @@ export const SidebarLayout = ({
                   onChange={(e) => {
                     if (!confirmDiscardEdit()) return;
                   setActiveProjectId(e.target.value);
-                  setActivePage(Object.keys(projects[e.target.value].docs)[0]);
+                  setActivePage(orderedPageKeys(projects[e.target.value].docs)[0]);
                   leaveEditor();
                   setShowProjectSettings(false);
                 }}
@@ -159,6 +164,19 @@ export const SidebarLayout = ({
               </button>
               {!isAddingData && (
                 <>
+                  <button
+                    onClick={handleTogglePinDocument}
+                    className="p-2 border-2 transition-colors cursor-pointer"
+                    style={{
+                      borderColor: activeTheme.textColor,
+                      backgroundColor: currentPageData?.pinned ? activeTheme.textColor : 'transparent',
+                      color: currentPageData?.pinned ? activeTheme.bgColor : activeTheme.textColor,
+                    }}
+                    title={currentPageData?.pinned ? 'Unpin Document' : 'Pin Document'}
+                    aria-pressed={Boolean(currentPageData?.pinned)}
+                  >
+                    <Pin className="w-5 h-5" />
+                  </button>
                   <button
                     onClick={() => {
                       if (isEditingData) {

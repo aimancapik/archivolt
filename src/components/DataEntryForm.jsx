@@ -759,7 +759,7 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
                                 key={sticker.id}
                                 src={sticker.previewUrl || sticker.url}
                                 alt=""
-                                className="absolute pointer-events-none"
+                                className="absolute z-40 pointer-events-none"
                                 style={{
                                   ...stickerPlacementStyle(sticker),
                                   outline: sticker.id === selectedSticker?.id ? `1px solid ${theme.textColor}` : 'none',
