@@ -360,7 +360,7 @@ export default function App() {
       case 'text':
         return <p key={index} className="font-mono-tech leading-relaxed mb-6" style={{ opacity: 0.85, fontSize: '14px' }}>{block.value}</p>;
       case 'heading':
-        return <h2 key={index} className="font-serif font-bold mt-14 mb-6 pb-2 inline-block" style={{ fontSize: 'clamp(1.5rem, 3vw, 2.2rem)', borderBottom: '2px solid currentColor' }}>{block.value}</h2>;
+        return <h2 key={index} className="font-serif font-bold mt-8 mb-3 pb-1.5 inline-block" style={{ fontSize: 'clamp(1.35rem, 2.4vw, 1.85rem)', borderBottom: '2px solid currentColor' }}>{block.value}</h2>;
       case 'code':
         return <CodeBlock key={index} language={block.language} code={block.value} />;
       case 'demo-input':

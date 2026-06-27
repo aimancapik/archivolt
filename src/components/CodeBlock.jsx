@@ -24,7 +24,7 @@ export const CodeBlock = ({ language, code }) => {
   const lines = code.split('\n');
 
   return (
-    <div className="my-8 overflow-hidden animate-fade-in" style={{ background: '#0d0d0e', border: '1px solid rgba(255,255,255,0.08)' }}>
+    <div className="my-5 overflow-hidden animate-fade-in" style={{ background: '#0d0d0e', border: '1px solid rgba(255,255,255,0.08)' }}>
       <div className="flex items-center justify-between px-4 py-2" style={{ background: '#161618', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
         <div className="flex items-center gap-3">
           <div className="flex gap-1.5">

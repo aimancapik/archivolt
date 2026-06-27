@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { X, GripVertical, Trash2, Save, Plus, Image, ChevronUp, ChevronDown, RotateCcw, Upload } from 'lucide-react';
+import { X, GripVertical, Trash2, Save, Plus, Image, ChevronUp, ChevronDown, RotateCcw, Upload, FileText, Copy, Check } from 'lucide-react';
 import { cn } from '../utils/helpers';
+import { markdownToBlocks } from '../utils/markdownToBlocks';
 import { normalizeSticker, pointerToStickerPoint, stickerPlacementStyle } from '../utils/stickerPlacement';
 
 const stickerFromContent = (sticker, index) => {
@@ -63,6 +64,48 @@ const previewBlockForRender = (block) => {
   return block;
 };
 
+const ARCHIVOLT_PROMPT = [
+  'Create an Archivolt documentation note for the code/function/file I provide.',
+  '',
+  'Return Markdown only. Follow this exact format:',
+  '',
+  '# [Short title]',
+  '',
+  '## Purpose',
+  'Explain what this code does in 1-3 short paragraphs.',
+  '',
+  '## Code',
+  '```js',
+  '[paste the most important code here]',
+  '```',
+  '',
+  '## How It Works',
+  '- Explain the main steps',
+  '- Mention inputs and outputs',
+  '- Mention where data is saved or returned',
+  '',
+  '## Usage',
+  '```js',
+  '[show a realistic usage example]',
+  '```',
+  '',
+  '## Notes',
+  '- Mention edge cases',
+  '- Mention related files/functions',
+  '- Mention anything future me should remember',
+  '',
+  'Rules:',
+  '- Do not add intro text before the Markdown.',
+  '- Do not add closing commentary after the Markdown.',
+  '- Keep it practical, like internal project notes.',
+  '- If the language is not JavaScript, change the code fence language.',
+  '- Use headings, bullet lists, paragraphs, and fenced code blocks only.',
+  '',
+  'Document this code:',
+  '',
+  '[paste code/function/file here]'
+].join('\n');
+
 export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activeColorTheme: theme, activeProject, initialData = null, mode = 'create', renderContent }) => {
   const isEditing = mode === 'edit';
   // Form States
@@ -71,6 +114,8 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
   const [version, setVersion] = useState(initialData?.version || 'CODE_009 // TEST');
   const [pageTitle, setPageTitle] = useState(initialData?.pageTitle || 'NEW REC');
   const [isSaving, setIsSaving] = useState(false);
+  const [markdownInput, setMarkdownInput] = useState('');
+  const [promptCopied, setPromptCopied] = useState(false);
 
   // Blocks list state - initialized with a Heading block and a Text block
   const [blocks, setBlocks] = useState(() => {
@@ -126,6 +171,31 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
       selectedStickerId: null
     };
     setBlocks((prev) => [...prev, newBlock]);
+  };
+
+  const importMarkdown = () => {
+    if (!markdownInput.trim()) {
+      alert('ERROR: MARKDOWN INPUT IS EMPTY.');
+      return;
+    }
+    if (blocks.length && !confirm('Replace current unsaved blocks with imported Markdown?')) return;
+    setBlocks(markdownToBlocks(markdownInput));
+  };
+
+  const copyArchivoltPrompt = () => {
+    navigator.clipboard.writeText(ARCHIVOLT_PROMPT).then(() => {
+      setPromptCopied(true);
+      setTimeout(() => setPromptCopied(false), 2000);
+    }).catch(() => {
+      const ta = document.createElement('textarea');
+      ta.value = ARCHIVOLT_PROMPT;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      setPromptCopied(true);
+      setTimeout(() => setPromptCopied(false), 2000);
+    });
   };
 
   const removeBlock = (id) => {
@@ -350,6 +420,43 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
 
         {/* Dynamic Blocks Section */}
         <div className="space-y-3">
+          <div className="space-y-2">
+            <label className="font-mono-tech uppercase font-bold block" style={{ fontSize: '9px', letterSpacing: '0.12em' }}>IMPORT_MARKDOWN</label>
+            <textarea
+              value={markdownInput}
+              onChange={(e) => setMarkdownInput(e.target.value)}
+              className="w-full p-3 bg-transparent font-mono-tech focus:outline-none resize-y"
+              style={{ border: `1px dashed ${theme.textColor}`, fontSize: '12px', minHeight: '110px', color: 'inherit' }}
+              placeholder={"# Function Name\nPaste AI-generated Markdown here..."}
+            />
+            <div className="flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={copyArchivoltPrompt}
+                className="px-4 py-2 border font-mono-tech text-xs cursor-pointer hover:bg-[rgba(255,255,255,0.05)] transition-colors flex items-center gap-1.5"
+                style={{ borderColor: theme.borderColor, color: theme.textColor, borderRadius: '4px', background: 'transparent' }}
+              >
+                {promptCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />} {promptCopied ? 'COPIED PROMPT' : 'COPY PROMPT'}
+              </button>
+              <button
+                type="button"
+                onClick={importMarkdown}
+                className="px-4 py-2 border font-mono-tech text-xs cursor-pointer hover:bg-[rgba(255,255,255,0.05)] transition-colors flex items-center gap-1.5"
+                style={{ borderColor: theme.textColor, color: theme.textColor, borderRadius: '4px', background: 'transparent' }}
+              >
+                <FileText className="w-3.5 h-3.5" /> IMPORT MARKDOWN
+              </button>
+              <button
+                type="button"
+                onClick={() => setMarkdownInput('')}
+                className="px-4 py-2 border font-mono-tech text-xs cursor-pointer hover:bg-[rgba(255,255,255,0.05)] transition-colors"
+                style={{ borderColor: theme.borderColor, color: theme.textColor, borderRadius: '4px', background: 'transparent' }}
+              >
+                CLEAR
+              </button>
+            </div>
+          </div>
+
           <label className="font-mono-tech uppercase font-bold block" style={{ fontSize: '9px', letterSpacing: '0.12em' }}>DOCUMENT_STRUCTURE (DRAG TO REORDER)</label>
           
           <div className="block-editor-list">
@@ -423,6 +530,7 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
                               style={{ color: 'inherit' }}
                             >
                               <option value="javascript" style={{ color: '#1a1b1c', background: '#e4decd' }}>JavaScript</option>
+                              <option value="typescript" style={{ color: '#1a1b1c', background: '#e4decd' }}>TypeScript</option>
                               <option value="html" style={{ color: '#1a1b1c', background: '#e4decd' }}>HTML</option>
                               <option value="bash" style={{ color: '#1a1b1c', background: '#e4decd' }}>Bash</option>
                               <option value="css" style={{ color: '#1a1b1c', background: '#e4decd' }}>CSS</option>
