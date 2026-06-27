@@ -257,13 +257,15 @@ export default function App() {
       setProjects((prev) => {
         const next = { ...prev };
         const project = { ...next[activeProjectId] };
-        const docs = { ...project.docs };
-        docs[newPageId] = {
-          title: formData.pageTitle.toUpperCase(),
-          subtitle: formData.version.toUpperCase(),
-          content
+        const docs = Object.fromEntries(Object.entries(project.docs).filter(([id]) => id !== newPageId));
+        project.docs = {
+          [newPageId]: {
+            title: formData.pageTitle.toUpperCase(),
+            subtitle: formData.version.toUpperCase(),
+            content
+          },
+          ...docs
         };
-        project.docs = docs;
         next[activeProjectId] = project;
         return next;
       });
@@ -390,7 +392,7 @@ export default function App() {
         if (!block.url) return null;
         return (
           <figure key={index} className="my-10 p-2" style={{ border: '1px solid rgba(255,255,255,0.1)', background: '#0d0d0e' }}>
-            <img src={block.url} alt="Reference" className="w-full h-auto" style={{ filter: 'grayscale(0.8) contrast(1.15) brightness(0.85)' }} />
+            <img src={block.url} alt="Reference" className="w-full h-auto" />
             {block.caption && <figcaption className="font-mono-tech uppercase mt-2" style={{ fontSize: '9px', color: '#888' }}>{block.caption}</figcaption>}
           </figure>
         );

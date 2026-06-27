@@ -228,7 +228,7 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
   const updateChecklistItems = (id, updater) => {
     setBlocks((prev) => prev.map((b) => {
       if (b.id !== id) return b;
-      const items = updater(checklistItemsFromText(b.value, { keepEmpty: true }));
+      const items = updater(checklistItemsFromText(b.value, { keepEmpty: true, preserveWhitespace: true }));
       return { ...b, value: checklistTextFromItems(items) };
     }));
   };
@@ -576,7 +576,7 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
                       <div>
                         <label className="font-mono-tech block text-[9px] uppercase opacity-45 mb-2">CHECKLIST ITEMS</label>
                         <div className="space-y-2">
-                          {checklistItemsFromText(block.value, { keepEmpty: true }).map((item, itemIndex) => (
+                          {checklistItemsFromText(block.value, { keepEmpty: true, preserveWhitespace: true }).map((item, itemIndex) => (
                             <div
                               key={itemIndex}
                               className="flex items-center gap-2 p-2"
@@ -628,15 +628,31 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
 
                     {block.type === 'image' && (
                       <div>
-                        <label className="font-mono-tech block text-[9px] uppercase opacity-45 mb-1">IMAGE</label>
-                        {block.url && <img src={block.url} alt="" className="mb-2 max-h-32 w-auto" />}
+                        <label className="font-mono-tech block text-[9px] uppercase opacity-45 mb-2">IMAGE</label>
+                        {(block.previewUrl || block.url) && (
+                          <div className="mb-3 inline-block p-2" style={{ border: `1px solid ${theme.borderColor}`, background: 'rgba(0,0,0,0.12)' }}>
+                            <img src={block.previewUrl || block.url} alt="" className="max-h-36 w-auto" />
+                          </div>
+                        )}
                         <input
+                          id={`image-upload-${block.id}`}
                           type="file"
                           accept="image/*"
                           onChange={(e) => updateBlockFile(block.id, e.target.files[0])}
-                          className="w-full p-2 bg-transparent font-mono-tech focus:outline-none"
-                          style={{ borderBottom: `1px solid ${theme.textColor}`, fontSize: '12px', color: 'inherit' }}
+                          className="sr-only"
                         />
+                        <div className="flex flex-wrap items-center gap-3">
+                          <label
+                            htmlFor={`image-upload-${block.id}`}
+                            className="inline-flex h-10 items-center gap-2 px-3 border font-mono-tech text-[10px] uppercase cursor-pointer transition-colors hover:bg-[rgba(255,255,255,0.06)]"
+                            style={{ borderColor: theme.textColor, color: theme.textColor }}
+                          >
+                            <Upload size={14} /> Choose Image
+                          </label>
+                          <span className="font-mono-tech text-[10px] uppercase opacity-55">
+                            {block.file?.name || (block.url ? 'Image loaded' : 'No image selected')}
+                          </span>
+                        </div>
                         <input
                           type="text"
                           value={block.value}

@@ -10,3 +10,7 @@ assert.deepEqual(checklistItemsFromText('[ ] Run build\n[x] Push code\nReview UI
 assert.deepEqual(checklistItemsFromText('[ ] ', { keepEmpty: true }), [
   { checked: false, text: '' }
 ]);
+
+assert.deepEqual(checklistItemsFromText('[ ] hello ', { keepEmpty: true, preserveWhitespace: true }), [
+  { checked: false, text: 'hello ' }
+]);
