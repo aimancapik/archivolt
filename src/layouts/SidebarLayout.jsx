@@ -102,14 +102,6 @@ export const SidebarLayout = ({
     };
   }), [activePage, currentPageData?.content, currentPageData?.title]);
 
-  const mapMarkStyle = (markIndex) => {
-    const distance = Math.abs(markIndex - activeMapIndex);
-    return {
-      '--map-mark-opacity': Math.max(0.24, 0.95 - distance * 0.18),
-      '--map-mark-width': `${Math.max(8, 36 - distance * 9)}px`
-    };
-  };
-
   const commands = (() => {
     const items = [
       { id: 'new-record', label: 'New record', meta: 'Create document or project', type: 'ACTION', keywords: 'create add commit', run: startNewRecord },
@@ -424,7 +416,6 @@ export const SidebarLayout = ({
                             document.getElementById(mark.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
                           }}
                           className={`section-map-rail__mark ${mark.type === 'heading' ? 'is-heading' : ''} ${markIndex === activeMapIndex ? 'is-current' : ''}`}
-                          style={mapMarkStyle(markIndex)}
                           title={mark.title}
                           aria-label={`Jump to ${mark.title}`}
                         />

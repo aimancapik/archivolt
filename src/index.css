@@ -274,15 +274,13 @@ select:focus-visible,
 }
 
 .section-map-rail__mark {
-  --map-mark-opacity: 0.24;
-  --map-mark-width: 8px;
   position: relative;
   width: 44px;
   height: 18px;
   padding: 0;
   background: transparent;
   border: 0;
-  opacity: var(--map-mark-opacity);
+  opacity: 0.24;
   transition: opacity 0.15s ease;
 }
 
@@ -290,12 +288,16 @@ select:focus-visible,
   position: absolute;
   left: 0;
   top: 50%;
-  width: var(--map-mark-width);
+  width: 8px;
   height: 2px;
   background: currentColor;
   content: '';
   transform: translateY(-50%);
   transition: width 0.15s ease;
+}
+
+.section-map-rail__mark.is-current {
+  opacity: 0.95;
 }
 
 .section-map-rail__mark:hover,
