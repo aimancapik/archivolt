@@ -266,7 +266,8 @@ export default function App() {
           [newPageId]: {
             title: formData.pageTitle.toUpperCase(),
             subtitle: formData.version.toUpperCase(),
-            content
+            content,
+            updatedAt: new Date().toISOString()
           },
           ...docs
         };
@@ -290,7 +291,8 @@ export default function App() {
             index: {
               title: formData.pageTitle.toUpperCase(), 
               subtitle: "CODE_000 // INIT",
-              content
+              content,
+              updatedAt: new Date().toISOString()
             }
           }
         };
@@ -315,7 +317,8 @@ export default function App() {
           ...project.docs[activePage],
           title: formData.pageTitle.toUpperCase(),
           subtitle: formData.version.toUpperCase(),
-          content
+          content,
+          updatedAt: new Date().toISOString()
         }
       };
       next[activeProjectId] = project;
@@ -400,6 +403,32 @@ export default function App() {
       return next;
     });
     feedback.notify(willPin ? 'Record pinned' : 'Record unpinned', 'success');
+  };
+
+  const handleQuickNote = () => {
+    const id = `quick_${Date.now()}`;
+    setProjects((prev) => {
+      const next = { ...prev };
+      const project = { ...next[activeProjectId] };
+      project.docs = {
+        [id]: {
+          title: 'QUICK NOTE',
+          subtitle: 'INBOX // DRAFT',
+          updatedAt: new Date().toISOString(),
+          content: [
+            { type: 'heading', value: 'Inbox' },
+            { type: 'text', value: 'Capture now. Organize later.' }
+          ]
+        },
+        ...project.docs
+      };
+      next[activeProjectId] = project;
+      return next;
+    });
+    setActivePage(id);
+    setIsEditingData(true);
+    setIsAddingData(false);
+    feedback.notify('Quick note created', 'success');
   };
 
   const toggleChecklistItem = (blockIndex, itemIndex) => {
@@ -521,6 +550,7 @@ export default function App() {
           handleDeleteDocument={handleDeleteDocument}
           handleDeleteProject={handleDeleteProject}
           handleTogglePinDocument={handleTogglePinDocument}
+          handleQuickNote={handleQuickNote}
           confirmAction={feedback.confirmAction}
           notify={feedback.notify}
           orderedPageKeys={orderedPageKeys}

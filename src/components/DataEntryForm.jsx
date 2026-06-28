@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { X, GripVertical, Trash2, Save, Plus, Image, ChevronUp, ChevronDown, RotateCcw, Upload, FileText, Copy, Check } from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { X, GripVertical, Trash2, Save, Plus, Image, ChevronUp, ChevronDown, RotateCcw, Upload, FileText, Copy, Check, Undo2 } from 'lucide-react';
 import { cn } from '../utils/helpers';
 import { checklistItemsFromText, checklistTextFromItems } from '../utils/checklist';
 import { markdownToBlocks } from '../utils/markdownToBlocks';
@@ -125,6 +125,7 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
   const [markdownInput, setMarkdownInput] = useState('');
   const [promptCopied, setPromptCopied] = useState(false);
   const [collapsedBlockIds, setCollapsedBlockIds] = useState(() => new Set());
+  const [canUndoBlocks, setCanUndoBlocks] = useState(false);
 
   // Blocks list state - initialized with a Heading block and a Text block
   const [blocks, setBlocks] = useState(() => {
@@ -147,6 +148,8 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
       }
     ];
   });
+  const undoBlocksRef = useRef(null);
+  const stickerDragOffsetRef = useRef({ x: 0, y: 0 });
   const currentSignature = useMemo(
     () => formSignature({ recordType, projectName, version, pageTitle, blocks }),
     [recordType, projectName, version, pageTitle, blocks]
@@ -175,6 +178,21 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
 
   const clampPercent = (value) => Math.min(100, Math.max(0, Number(value) || 0));
 
+  const updateBlocks = (updater) => {
+    setBlocks((prev) => {
+      undoBlocksRef.current = prev;
+      setCanUndoBlocks(true);
+      return typeof updater === 'function' ? updater(prev) : updater;
+    });
+  };
+
+  const undoBlocks = () => {
+    if (!undoBlocksRef.current) return;
+    setBlocks(undoBlocksRef.current);
+    undoBlocksRef.current = null;
+    setCanUndoBlocks(false);
+  };
+
   useEffect(() => {
     onDirtyChange?.(currentSignature !== initialSignature);
   }, [currentSignature, initialSignature, onDirtyChange]);
@@ -199,7 +217,7 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
       stickers: type === 'stickers' ? [] : undefined,
       selectedStickerId: null
     };
-    setBlocks((prev) => [...prev, newBlock]);
+    updateBlocks((prev) => [...prev, newBlock]);
   };
 
   const importMarkdown = async () => {
@@ -212,7 +230,7 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
       message: 'Replace current unsaved blocks with imported Markdown?',
       confirmText: 'Import'
     })) return;
-    setBlocks(markdownToBlocks(markdownInput));
+    updateBlocks(markdownToBlocks(markdownInput));
     notify('Markdown imported', 'success');
   };
 
@@ -235,23 +253,23 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
   };
 
   const removeBlock = (id) => {
-    setBlocks((prev) => prev.filter((b) => b.id !== id));
+    updateBlocks((prev) => prev.filter((b) => b.id !== id));
   };
 
   const updateBlockValue = (id, val) => {
-    setBlocks((prev) =>
+    updateBlocks((prev) =>
       prev.map((b) => (b.id === id ? { ...b, value: val } : b))
     );
   };
 
   const updateBlockLanguage = (id, lang) => {
-    setBlocks((prev) =>
+    updateBlocks((prev) =>
       prev.map((b) => (b.id === id ? { ...b, language: lang } : b))
     );
   };
 
   const updateChecklistItems = (id, updater) => {
-    setBlocks((prev) => prev.map((b) => {
+    updateBlocks((prev) => prev.map((b) => {
       if (b.id !== id) return b;
       const items = updater(checklistItemsFromText(b.value, { keepEmpty: true, preserveWhitespace: true }));
       return { ...b, value: checklistTextFromItems(items) };
@@ -259,13 +277,13 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
   };
 
   const updateBlockFile = (id, file) => {
-    setBlocks((prev) =>
+    updateBlocks((prev) =>
       prev.map((b) => (b.id === id ? { ...b, file, previewUrl: file ? URL.createObjectURL(file) : '' } : b))
     );
   };
 
   const updateBlockMeta = (id, key, value) => {
-    setBlocks((prev) =>
+    updateBlocks((prev) =>
       prev.map((b) => (b.id === id ? { ...b, [key]: value } : b))
     );
   };
@@ -281,7 +299,7 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
       rotation: 0,
       placed: false
     }));
-    setBlocks((prev) => prev.map((b) => b.id === id ? {
+    updateBlocks((prev) => prev.map((b) => b.id === id ? {
       ...b,
       stickers: [...(b.stickers || []), ...nextStickers],
       selectedStickerId: b.selectedStickerId || (nextStickers.length === 1 ? nextStickers[0]?.id : null)
@@ -289,14 +307,14 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
   };
 
   const updateSelectedSticker = (blockId, patch) => {
-    setBlocks((prev) => prev.map((b) => b.id === blockId ? {
+    updateBlocks((prev) => prev.map((b) => b.id === blockId ? {
       ...b,
       stickers: (b.stickers || []).map((sticker) => sticker.id === b.selectedStickerId ? { ...sticker, ...patch } : sticker)
     } : b));
   };
 
   const deleteSelectedSticker = (blockId) => {
-    setBlocks((prev) => prev.map((b) => {
+    updateBlocks((prev) => prev.map((b) => {
       if (b.id !== blockId) return b;
       const stickers = (b.stickers || []).filter((sticker) => sticker.id !== b.selectedStickerId);
       return { ...b, stickers, selectedStickerId: stickers[0]?.id || null };
@@ -304,7 +322,7 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
   };
 
   const deleteSticker = (blockId, stickerId) => {
-    setBlocks((prev) => prev.map((b) => {
+    updateBlocks((prev) => prev.map((b) => {
       if (b.id !== blockId) return b;
       const stickers = (b.stickers || []).filter((sticker) => sticker.id !== stickerId);
       return { ...b, stickers, selectedStickerId: b.selectedStickerId === stickerId ? stickers[0]?.id || null : b.selectedStickerId };
@@ -316,6 +334,18 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
       ...pointerToStickerPoint(clientX, clientY, target.getBoundingClientRect()),
       placed: true
     });
+  };
+
+  const placeSticker = (blockId, stickerId, target, clientX, clientY) => {
+    updateBlocks((prev) => prev.map((b) => b.id === blockId ? {
+      ...b,
+      selectedStickerId: stickerId,
+      stickers: (b.stickers || []).map((sticker) => sticker.id === stickerId ? {
+        ...sticker,
+        ...pointerToStickerPoint(clientX, clientY, target.getBoundingClientRect()),
+        placed: true
+      } : sticker)
+    } : b));
   };
 
   const nudgeSelectedSticker = (blockId, sticker, dx, dy) => {
@@ -334,7 +364,7 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
   const handleDragOver = (e, index) => {
     e.preventDefault();
     if (draggedIndex === null || draggedIndex === index) return;
-    setBlocks((prev) => {
+    updateBlocks((prev) => {
       const next = [...prev];
       const [item] = next.splice(draggedIndex, 1);
       next.splice(index, 0, item);
@@ -789,6 +819,7 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
                           </h1>
                           <div
                             role="button"
+                            data-sticker-stage
                             tabIndex={0}
                             onPointerDown={(e) => {
                               if (!selectedSticker) return;
@@ -834,7 +865,20 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
                                 alt=""
                                 onPointerDown={(e) => {
                                   e.stopPropagation();
+                                  const stage = e.currentTarget.closest('[data-sticker-stage]');
+                                  if (!stage) return;
+                                  const stageRect = stage.getBoundingClientRect();
+                                  stickerDragOffsetRef.current = {
+                                    x: e.clientX - (stageRect.left + (Number(sticker.x) || 0) / 100 * stageRect.width),
+                                    y: e.clientY - (stageRect.top + (Number(sticker.y) || 0) / 100 * STICKER_STAGE_HEIGHT)
+                                  };
+                                  e.currentTarget.setPointerCapture(e.pointerId);
                                   updateBlockMeta(block.id, 'selectedStickerId', sticker.id);
+                                }}
+                                onPointerMove={(e) => {
+                                  if (!e.currentTarget.hasPointerCapture(e.pointerId)) return;
+                                  const stage = e.currentTarget.closest('[data-sticker-stage]');
+                                  if (stage) placeSticker(block.id, sticker.id, stage, e.clientX - stickerDragOffsetRef.current.x, e.clientY - stickerDragOffsetRef.current.y);
                                 }}
                                 onClick={(e) => {
                                   e.stopPropagation();
@@ -1052,6 +1096,15 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
         </div>
 
         <div className="sticky bottom-0 z-30 flex flex-col gap-3 border-t py-3 backdrop-blur md:flex-row" style={{ borderColor: theme.borderColor, background: theme.bgColor }}>
+          <button
+            type="button"
+            onClick={undoBlocks}
+            disabled={!canUndoBlocks}
+            className="py-4 px-5 bg-transparent font-display font-bold uppercase flex items-center justify-center gap-2 transition-all cursor-pointer disabled:cursor-not-allowed"
+            style={{ border: `1px solid ${theme.borderColor}`, fontSize: '14px', letterSpacing: '0.1em', color: theme.textColor, opacity: canUndoBlocks ? 1 : 0.35 }}
+          >
+            <Undo2 className="w-4 h-4" /> UNDO
+          </button>
           <button type="submit"
             disabled={isSaving}
             className="flex-1 py-4 bg-transparent font-display font-bold uppercase flex items-center justify-center gap-2 transition-all cursor-pointer"

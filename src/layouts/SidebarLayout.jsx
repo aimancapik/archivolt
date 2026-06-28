@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Plus, ArrowLeft, ArrowRight, ChevronDown, Edit3, Trash2, Settings, Pin, Search } from 'lucide-react';
+import { Plus, ArrowLeft, ArrowRight, ChevronDown, Edit3, Trash2, Settings, Pin, Search, FileText } from 'lucide-react';
 import { CommandPalette } from '../components/CommandPalette';
 import { DataEntryForm } from '../components/DataEntryForm';
 import { documentHeadings } from '../utils/documentStructure';
@@ -28,6 +28,7 @@ export const SidebarLayout = ({
   handleDeleteDocument,
   handleDeleteProject,
   handleTogglePinDocument,
+  handleQuickNote,
   notify,
   orderedPageKeys,
   renderContent
@@ -37,6 +38,7 @@ export const SidebarLayout = ({
   const [isMapPreviewSuppressed, setIsMapPreviewSuppressed] = useState(false);
   const [showProjectSettings, setShowProjectSettings] = useState(false);
   const [hasDirtyEdit, setHasDirtyEdit] = useState(false);
+  const [savedView, setSavedView] = useState('all');
   const contentRef = useRef(null);
   const scrollToTop = () => contentRef.current?.scrollTo(0, 0);
 
@@ -102,8 +104,36 @@ export const SidebarLayout = ({
     };
   }), [activePage, currentPageData?.content, currentPageData?.title]);
 
+  const docText = (doc) => [doc?.title, doc?.subtitle, ...(doc?.content || []).map((block) => block.value || block.caption || block.defaultCode || (block.items || []).join?.(' ') || '')].join(' ').toLowerCase();
+  const docHasType = (doc, type) => (doc?.content || []).some((block) => block.type === type || block.type === `${type}s` || (type === 'code' && block.type === 'playground'));
+  const filteredPageKeys = pageKeys.filter((key) => {
+    const doc = activeProject?.docs?.[key];
+    if (savedView === 'pinned') return doc?.pinned;
+    if (savedView === 'code') return docHasType(doc, 'code');
+    if (savedView === 'stickers') return docHasType(doc, 'sticker');
+    return true;
+  }).sort((a, b) => savedView === 'recent'
+    ? new Date(activeProject?.docs?.[b]?.updatedAt || 0) - new Date(activeProject?.docs?.[a]?.updatedAt || 0)
+    : 0);
+
+  const relatedRecords = useMemo(() => {
+    if (!currentPageData) return [];
+    const words = new Set(docText(currentPageData).match(/[a-z0-9_]{4,}/g)?.slice(0, 24) || []);
+    if (!words.size) return [];
+
+    return Object.entries(projects).flatMap(([projectId, project]) => (
+      orderedPageKeys(project.docs).map((pageKey) => {
+        const doc = project.docs[pageKey];
+        if (projectId === activeProjectId && pageKey === activePage) return null;
+        const score = (docText(doc).match(/[a-z0-9_]{4,}/g) || []).filter((word) => words.has(word)).length;
+        return score ? { projectId, pageKey, doc, project, score } : null;
+      })
+    )).filter(Boolean).sort((a, b) => b.score - a.score).slice(0, 3);
+  }, [activePage, activeProjectId, currentPageData, orderedPageKeys, projects]);
+
   const commands = (() => {
     const items = [
+      { id: 'quick-note', label: 'Quick note', meta: 'Capture now, organize later', type: 'ACTION', keywords: 'inbox quick draft note', run: handleQuickNote },
       { id: 'new-record', label: 'New record', meta: 'Create document or project', type: 'ACTION', keywords: 'create add commit', run: startNewRecord },
       { id: 'edit-record', label: isEditingData ? 'View current record' : 'Edit current record', meta: currentPageData?.title || 'Current document', type: 'ACTION', keywords: 'edit view document', run: startEditRecord },
       { id: 'pin-record', label: currentPageData?.pinned ? 'Unpin current record' : 'Pin current record', meta: currentPageData?.title || 'Current document', type: 'ACTION', keywords: 'pin favorite order', run: handleTogglePinDocument }
@@ -194,7 +224,25 @@ export const SidebarLayout = ({
       >
         {/* LEFT SIDE: Vertical Staggered Tabs */}
         <div className="archive-tab-rail flex flex-col z-10 w-24 md:w-32 shrink-0 -mr-[2px] overflow-y-auto scrollbar-none" style={{ maxHeight: '100%' }}>
-          {pageKeys.map((key, index) => {
+          <div className="sticky top-0 z-30 grid grid-cols-1 gap-1 p-2" style={{ backgroundColor: 'rgba(0,0,0,0.22)' }}>
+            {['all', 'pinned', 'recent', 'code', 'stickers'].map((view) => (
+              <button
+                key={view}
+                type="button"
+                onClick={() => setSavedView(view)}
+                className="border px-2 py-1 font-mono-tech text-[8px] uppercase cursor-pointer"
+                style={{
+                  borderColor: savedView === view ? activeTheme.textColor : 'rgba(255,255,255,0.14)',
+                  color: activeTheme.textColor,
+                  opacity: savedView === view ? 1 : 0.55,
+                  background: 'transparent'
+                }}
+              >
+                {view}
+              </button>
+            ))}
+          </div>
+          {filteredPageKeys.map((key, index) => {
             const isActive = activePage === key;
             const doc = activeProject.docs[key];
             const theme = PALETTE[index % PALETTE.length];
@@ -233,6 +281,9 @@ export const SidebarLayout = ({
               </button>
             );
           })}
+          {!filteredPageKeys.length && (
+            <div className="p-3 font-mono-tech text-[9px] uppercase opacity-50">No records</div>
+          )}
         </div>
 
         {/* RIGHT SIDE: Active Folder Content */}
@@ -297,6 +348,15 @@ export const SidebarLayout = ({
                 title="New Directory"
               >
                 <Plus className="w-5 h-5 transition-transform" style={{ transform: isAddingData ? 'rotate(45deg)' : 'none' }} />
+              </button>
+              <button
+                onClick={handleQuickNote}
+                className="p-2 border-2 transition-colors cursor-pointer"
+                style={{ borderColor: activeTheme.textColor, color: activeTheme.textColor }}
+                title="Quick Note"
+                aria-label="Create quick note"
+              >
+                <FileText className="w-5 h-5" />
               </button>
               {!isAddingData && (
                 <>
@@ -442,6 +502,26 @@ export const SidebarLayout = ({
                     </div>
                   ))}
                 </div>
+
+                {!!relatedRecords.length && (
+                  <div className="mt-16 border-t pt-6" style={{ borderColor: activeTheme.borderColor }}>
+                    <div className="mb-3 font-mono-tech text-[10px] uppercase opacity-60">Related records</div>
+                    <div className="grid gap-3 md:grid-cols-3">
+                      {relatedRecords.map((item) => (
+                        <button
+                          key={`${item.projectId}-${item.pageKey}`}
+                          type="button"
+                          onClick={() => goToProjectPage(item.projectId, item.pageKey)}
+                          className="border p-3 text-left transition-opacity cursor-pointer hover:opacity-75"
+                          style={{ borderColor: activeTheme.borderColor, color: activeTheme.textColor, background: 'transparent' }}
+                        >
+                          <div className="font-serif font-bold uppercase leading-tight">{item.doc.title}</div>
+                          <div className="mt-2 font-mono-tech text-[9px] uppercase opacity-55">{item.project.name}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* Brutalist Pagination Footer */}
                 <div 
