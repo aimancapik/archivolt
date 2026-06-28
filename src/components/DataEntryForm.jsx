@@ -784,6 +784,9 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
                             color: theme.textColor,
                           }}
                         >
+                          <h1 className="font-display mb-6 max-w-[70%] text-3xl font-bold uppercase leading-tight md:text-5xl" style={{ letterSpacing: '-0.03em' }}>
+                            {pageTitle}
+                          </h1>
                           <div
                             role="button"
                             tabIndex={0}
@@ -810,7 +813,7 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
                               e.preventDefault();
                               if (selectedSticker) updateSelectedSticker(block.id, { x: 50, y: 50, placed: true });
                             }}
-                            className="relative select-none"
+                            className="relative z-10 mt-12 select-none animate-fade-in md:mt-0"
                             style={{ minHeight: STICKER_STAGE_HEIGHT }}
                             aria-label="Place selected sticker"
                           >
@@ -819,7 +822,7 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
                                 Select a sticker thumbnail first
                               </div>
                             )}
-                            <div className="pointer-events-none mt-12 md:mt-0 relative z-10 animate-fade-in">
+                            <div className="pointer-events-none">
                               {blocks.map((previewBlock, previewIndex) => (
                                 previewBlock.type === 'stickers' ? null : renderContent(previewBlockForRender(previewBlock), previewIndex)
                               ))}
