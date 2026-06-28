@@ -402,6 +402,7 @@ export const SidebarLayout = ({
                   <nav
                     className={`section-map-rail ${isMapPreviewSuppressed ? 'is-preview-suppressed' : ''}`}
                     onPointerLeave={() => setIsMapPreviewSuppressed(false)}
+                    onPointerMove={() => isMapPreviewSuppressed && setIsMapPreviewSuppressed(false)}
                     aria-label="Record map"
                   >
                     {mapMarks.map((mark, markIndex) => (
