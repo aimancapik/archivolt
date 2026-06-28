@@ -34,6 +34,7 @@ export const SidebarLayout = ({
 }) => {
   const [commandOpen, setCommandOpen] = useState(false);
   const [activeMapIndex, setActiveMapIndex] = useState(0);
+  const [isMapPreviewSuppressed, setIsMapPreviewSuppressed] = useState(false);
   const [showProjectSettings, setShowProjectSettings] = useState(false);
   const [hasDirtyEdit, setHasDirtyEdit] = useState(false);
   const contentRef = useRef(null);
@@ -398,12 +399,19 @@ export const SidebarLayout = ({
                 </h1>
 
                 {!!mapMarks.length && (
-                  <nav className="section-map-rail" aria-label="Record map">
+                  <nav
+                    className={`section-map-rail ${isMapPreviewSuppressed ? 'is-preview-suppressed' : ''}`}
+                    onPointerLeave={() => setIsMapPreviewSuppressed(false)}
+                    aria-label="Record map"
+                  >
                     {mapMarks.map((mark, markIndex) => (
                       <div key={mark.id} className="section-map-rail__item">
                         <button
                           type="button"
-                          onClick={() => {
+                          onPointerDown={() => setIsMapPreviewSuppressed(true)}
+                          onClick={(event) => {
+                            setIsMapPreviewSuppressed(true);
+                            event.currentTarget.blur();
                             setActiveMapIndex(markIndex);
                             document.getElementById(mark.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
                           }}

@@ -316,6 +316,10 @@ select:focus-visible,
   display: block;
 }
 
+.section-map-rail.is-preview-suppressed .section-map-preview {
+  display: none;
+}
+
 .section-map-preview__title {
   overflow: hidden;
   text-overflow: ellipsis;
