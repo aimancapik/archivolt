@@ -832,7 +832,15 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
                                 key={sticker.id}
                                 src={sticker.previewUrl || sticker.url}
                                 alt=""
-                                className="absolute z-40 pointer-events-none"
+                                onPointerDown={(e) => {
+                                  e.stopPropagation();
+                                  updateBlockMeta(block.id, 'selectedStickerId', sticker.id);
+                                }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  updateBlockMeta(block.id, 'selectedStickerId', sticker.id);
+                                }}
+                                className="absolute z-40 cursor-move"
                                 style={{
                                   ...stickerPlacementStyle(sticker),
                                   outline: sticker.id === selectedSticker?.id ? `1px solid ${theme.textColor}` : 'none',
