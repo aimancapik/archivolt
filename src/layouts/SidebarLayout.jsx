@@ -257,9 +257,10 @@ export const SidebarLayout = ({
                   value={activeProjectId}
                   aria-label="Active project"
                   onChange={async (e) => {
+                    const nextProjectId = e.target.value;
                     if (!await confirmDiscardEdit()) return;
-                    setActiveProjectId(e.target.value);
-                    setActivePage(orderedPageKeys(projects[e.target.value].docs)[0]);
+                    setActiveProjectId(nextProjectId);
+                    setActivePage(orderedPageKeys(projects[nextProjectId].docs)[0]);
                     leaveEditor();
                     setShowProjectSettings(false);
                   }}
