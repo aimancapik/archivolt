@@ -405,32 +405,6 @@ export default function App() {
     feedback.notify(willPin ? 'Record pinned' : 'Record unpinned', 'success');
   };
 
-  const handleQuickNote = () => {
-    const id = `quick_${Date.now()}`;
-    setProjects((prev) => {
-      const next = { ...prev };
-      const project = { ...next[activeProjectId] };
-      project.docs = {
-        [id]: {
-          title: 'QUICK NOTE',
-          subtitle: 'INBOX // DRAFT',
-          updatedAt: new Date().toISOString(),
-          content: [
-            { type: 'heading', value: 'Inbox' },
-            { type: 'text', value: 'Capture now. Organize later.' }
-          ]
-        },
-        ...project.docs
-      };
-      next[activeProjectId] = project;
-      return next;
-    });
-    setActivePage(id);
-    setIsEditingData(true);
-    setIsAddingData(false);
-    feedback.notify('Quick note created', 'success');
-  };
-
   const toggleChecklistItem = (blockIndex, itemIndex) => {
     if (!currentPageData?.content?.[blockIndex] || currentPageData.content[blockIndex].type !== 'checklist') return;
     setProjects((prev) => {
@@ -550,7 +524,6 @@ export default function App() {
           handleDeleteDocument={handleDeleteDocument}
           handleDeleteProject={handleDeleteProject}
           handleTogglePinDocument={handleTogglePinDocument}
-          handleQuickNote={handleQuickNote}
           confirmAction={feedback.confirmAction}
           notify={feedback.notify}
           orderedPageKeys={orderedPageKeys}
