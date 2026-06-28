@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Plus, ArrowLeft, ArrowRight, ChevronDown, Edit3, Trash2, Settings, Pin, Search } from 'lucide-react';
 import { CommandPalette } from '../components/CommandPalette';
 import { DataEntryForm } from '../components/DataEntryForm';
@@ -89,7 +89,7 @@ export const SidebarLayout = ({
     setShowProjectSettings(false);
   };
 
-  const mapMarks = (currentPageData?.content || []).map((block, index) => {
+  const mapMarks = useMemo(() => (currentPageData?.content || []).map((block, index) => {
     const rawText = block.value || block.caption || block.defaultCode || (block.items || []).join?.(' ') || block.type;
     const title = block.type === 'heading' ? rawText : currentPageData?.title || block.type;
     const summary = String(rawText || '').replace(/\s+/g, ' ').trim();
@@ -99,7 +99,7 @@ export const SidebarLayout = ({
       title,
       type: block.type
     };
-  });
+  }), [activePage, currentPageData?.content, currentPageData?.title]);
 
   const commands = (() => {
     const items = [
@@ -145,6 +145,40 @@ export const SidebarLayout = ({
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
+
+  useEffect(() => {
+    if (isAddingData || isEditingData || !mapMarks.length) {
+      setActiveMapIndex(0);
+      return;
+    }
+
+    const scrollRoot = contentRef.current;
+    if (!scrollRoot) return;
+
+    const syncActiveMap = () => {
+      const rootRect = scrollRoot.getBoundingClientRect();
+      const targetTop = rootRect.top + rootRect.height / 2;
+      let nextIndex = 0;
+
+      mapMarks.forEach((mark, index) => {
+        const markerTarget = document.getElementById(mark.id);
+        if (markerTarget && markerTarget.getBoundingClientRect().top <= targetTop) {
+          nextIndex = index;
+        }
+      });
+
+      setActiveMapIndex((currentIndex) => currentIndex === nextIndex ? currentIndex : nextIndex);
+    };
+
+    syncActiveMap();
+    scrollRoot.addEventListener('scroll', syncActiveMap, { passive: true });
+    window.addEventListener('resize', syncActiveMap);
+
+    return () => {
+      scrollRoot.removeEventListener('scroll', syncActiveMap);
+      window.removeEventListener('resize', syncActiveMap);
+    };
+  }, [isAddingData, isEditingData, mapMarks]);
 
   return (
     <div className="h-full w-full flex justify-center items-center px-2 md:px-6 lg:px-10 animate-fade-in" style={{ zIndex: 10 }}>
