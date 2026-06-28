@@ -149,7 +149,6 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
     ];
   });
   const undoBlocksRef = useRef(null);
-  const stickerDragOffsetRef = useRef({ x: 0, y: 0 });
   const currentSignature = useMemo(
     () => formSignature({ recordType, projectName, version, pageTitle, blocks }),
     [recordType, projectName, version, pageTitle, blocks]
@@ -334,18 +333,6 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
       ...pointerToStickerPoint(clientX, clientY, target.getBoundingClientRect()),
       placed: true
     });
-  };
-
-  const placeSticker = (blockId, stickerId, target, clientX, clientY) => {
-    updateBlocks((prev) => prev.map((b) => b.id === blockId ? {
-      ...b,
-      selectedStickerId: stickerId,
-      stickers: (b.stickers || []).map((sticker) => sticker.id === stickerId ? {
-        ...sticker,
-        ...pointerToStickerPoint(clientX, clientY, target.getBoundingClientRect()),
-        placed: true
-      } : sticker)
-    } : b));
   };
 
   const nudgeSelectedSticker = (blockId, sticker, dx, dy) => {
@@ -814,12 +801,8 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
                             color: theme.textColor,
                           }}
                         >
-                          <h1 className="font-display mb-6 max-w-[70%] text-3xl font-bold uppercase leading-tight md:text-5xl" style={{ letterSpacing: '-0.03em' }}>
-                            {pageTitle}
-                          </h1>
                           <div
                             role="button"
-                            data-sticker-stage
                             tabIndex={0}
                             onPointerDown={(e) => {
                               if (!selectedSticker) return;
@@ -844,7 +827,7 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
                               e.preventDefault();
                               if (selectedSticker) updateSelectedSticker(block.id, { x: 50, y: 50, placed: true });
                             }}
-                            className="relative z-10 mt-12 select-none animate-fade-in md:mt-0"
+                            className="relative select-none"
                             style={{ minHeight: STICKER_STAGE_HEIGHT }}
                             aria-label="Place selected sticker"
                           >
@@ -853,7 +836,7 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
                                 Select a sticker thumbnail first
                               </div>
                             )}
-                            <div className="pointer-events-none">
+                            <div className="pointer-events-none mt-12 md:mt-0 relative z-10 animate-fade-in">
                               {blocks.map((previewBlock, previewIndex) => (
                                 previewBlock.type === 'stickers' ? null : renderContent(previewBlockForRender(previewBlock), previewIndex)
                               ))}
@@ -863,28 +846,7 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
                                 key={sticker.id}
                                 src={sticker.previewUrl || sticker.url}
                                 alt=""
-                                onPointerDown={(e) => {
-                                  e.stopPropagation();
-                                  const stage = e.currentTarget.closest('[data-sticker-stage]');
-                                  if (!stage) return;
-                                  const stageRect = stage.getBoundingClientRect();
-                                  stickerDragOffsetRef.current = {
-                                    x: e.clientX - (stageRect.left + (Number(sticker.x) || 0) / 100 * stageRect.width),
-                                    y: e.clientY - (stageRect.top + (Number(sticker.y) || 0) / 100 * STICKER_STAGE_HEIGHT)
-                                  };
-                                  e.currentTarget.setPointerCapture(e.pointerId);
-                                  updateBlockMeta(block.id, 'selectedStickerId', sticker.id);
-                                }}
-                                onPointerMove={(e) => {
-                                  if (!e.currentTarget.hasPointerCapture(e.pointerId)) return;
-                                  const stage = e.currentTarget.closest('[data-sticker-stage]');
-                                  if (stage) placeSticker(block.id, sticker.id, stage, e.clientX - stickerDragOffsetRef.current.x, e.clientY - stickerDragOffsetRef.current.y);
-                                }}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  updateBlockMeta(block.id, 'selectedStickerId', sticker.id);
-                                }}
-                                className="absolute z-40 cursor-move"
+                                className="absolute z-40 pointer-events-none"
                                 style={{
                                   ...stickerPlacementStyle(sticker),
                                   outline: sticker.id === selectedSticker?.id ? `1px solid ${theme.textColor}` : 'none',

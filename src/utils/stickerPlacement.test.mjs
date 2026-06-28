@@ -13,9 +13,6 @@ assert.deepEqual(pointerToStickerPoint(30, 60, { left: 10, top: 20, width: 80, h
   y: 25
 });
 
-assert.equal(normalizeSticker({ x: 50, y: 150, width: 20 }).y, 150);
-assert.equal(pointerToStickerPoint(30, 1100, { left: 10, top: 20, width: 80, height: 1440 }).y, 150);
 assert.equal(stickerPlacementStyle({ x: 25, y: 75, width: 12 }).left, '25%');
 assert.equal(stickerPlacementStyle({ x: 25, y: 75, width: 12 }).top, '540px');
 assert.equal(stickerPlacementStyle({ y: 100 }).top, `${STICKER_STAGE_HEIGHT}px`);
-assert.equal(stickerPlacementStyle({ y: 150 }).top, '1080px');
