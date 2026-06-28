@@ -283,11 +283,13 @@ select:focus-visible,
 }
 
 .section-map-rail__mark.is-heading {
-  width: 13px;
   opacity: 0.42;
 }
 
-.section-map-rail__mark.is-current,
+.section-map-rail__mark.is-current {
+  opacity: 0.95;
+}
+
 .section-map-rail__mark:hover,
 .section-map-rail__mark:focus-visible {
   width: 32px;
@@ -428,7 +430,6 @@ select:focus-visible,
     gap: 8px;
   }
 
-  .section-map-rail__mark.is-current,
   .section-map-rail__mark:hover,
   .section-map-rail__mark:focus-visible {
     width: 24px;
