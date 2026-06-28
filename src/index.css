@@ -258,7 +258,7 @@ select:focus-visible,
 
 .section-map-rail {
   position: fixed;
-  left: clamp(40px, 5vw, 72px);
+  left: clamp(184px, 16vw, 244px);
   top: 50%;
   transform: translateY(-50%);
   z-index: 35;
@@ -348,7 +348,7 @@ select:focus-visible,
 
 @media (min-width: 900px) {
   .section-map-rail {
-    left: clamp(56px, 6vw, 96px);
+    left: clamp(204px, 17vw, 276px);
   }
 
   .section-map-preview {
@@ -423,7 +423,7 @@ select:focus-visible,
   }
 
   .section-map-rail {
-    left: 24px;
+    left: 28px;
     top: 50%;
     gap: 8px;
   }
