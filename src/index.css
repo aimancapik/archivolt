@@ -264,36 +264,48 @@ select:focus-visible,
   z-index: 35;
   display: flex;
   flex-direction: column;
-  gap: 9px;
 }
 
 .section-map-rail__item {
   position: relative;
-  height: 2px;
+  display: flex;
+  align-items: center;
+  height: 14px;
 }
 
 .section-map-rail__mark {
-  width: 8px;
-  height: 2px;
+  --map-mark-opacity: 0.24;
+  --map-mark-width: 8px;
+  position: relative;
+  width: 44px;
+  height: 18px;
   padding: 0;
-  background: currentColor;
+  background: transparent;
   border: 0;
-  opacity: 0.24;
-  transition: opacity 0.15s ease, transform 0.15s ease, width 0.15s ease;
+  opacity: var(--map-mark-opacity);
+  transition: opacity 0.15s ease;
 }
 
-.section-map-rail__mark.is-heading {
-  opacity: 0.42;
-}
-
-.section-map-rail__mark.is-current {
-  opacity: 0.95;
+.section-map-rail__mark::after {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: var(--map-mark-width);
+  height: 2px;
+  background: currentColor;
+  content: '';
+  transform: translateY(-50%);
+  transition: width 0.15s ease;
 }
 
 .section-map-rail__mark:hover,
 .section-map-rail__mark:focus-visible {
-  width: 32px;
   opacity: 0.95;
+}
+
+.section-map-rail__mark:hover::after,
+.section-map-rail__mark:focus-visible::after {
+  width: 36px;
 }
 
 .section-map-preview {
@@ -431,11 +443,10 @@ select:focus-visible,
   .section-map-rail {
     left: 28px;
     top: 50%;
-    gap: 8px;
   }
 
-  .section-map-rail__mark:hover,
-  .section-map-rail__mark:focus-visible {
+  .section-map-rail__mark:hover::after,
+  .section-map-rail__mark:focus-visible::after {
     width: 24px;
   }
 
