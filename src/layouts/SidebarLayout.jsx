@@ -1,6 +1,9 @@
-import React, { useRef, useState } from 'react';
-import { Plus, ArrowLeft, ArrowRight, ChevronDown, Edit3, Trash2, Settings, Pin } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { Plus, ArrowLeft, ArrowRight, ChevronDown, Edit3, Trash2, Settings, Pin, Search } from 'lucide-react';
+import { CommandPalette } from '../components/CommandPalette';
 import { DataEntryForm } from '../components/DataEntryForm';
+import { documentHeadings } from '../utils/documentStructure';
+import { STICKER_STAGE_HEIGHT } from '../utils/stickerPlacement';
 
 export const SidebarLayout = ({
   projects,
@@ -19,22 +22,31 @@ export const SidebarLayout = ({
   activeTheme,
   PALETTE,
   currentPageData,
+  confirmAction,
   handleSaveNewData,
   handleUpdateDocument,
   handleDeleteDocument,
   handleDeleteProject,
   handleTogglePinDocument,
+  notify,
   orderedPageKeys,
   renderContent
 }) => {
+  const [commandOpen, setCommandOpen] = useState(false);
+  const [activeMapIndex, setActiveMapIndex] = useState(0);
   const [showProjectSettings, setShowProjectSettings] = useState(false);
   const [hasDirtyEdit, setHasDirtyEdit] = useState(false);
   const contentRef = useRef(null);
   const scrollToTop = () => contentRef.current?.scrollTo(0, 0);
 
-  const confirmDiscardEdit = () => {
+  const confirmDiscardEdit = async () => {
     if (!isEditingData || !hasDirtyEdit) return true;
-    return confirm('Discard unsaved changes?');
+    return confirmAction({
+      title: 'Discard edits',
+      message: 'Leave the editor and discard unsaved changes?',
+      confirmText: 'Discard',
+      tone: 'danger'
+    });
   };
 
   const leaveEditor = () => {
@@ -43,18 +55,101 @@ export const SidebarLayout = ({
     setHasDirtyEdit(false);
   };
 
-  const goToPage = (key) => {
-    if (key === activePage) return;
-    if (!confirmDiscardEdit()) return;
+  const goToProjectPage = async (projectId, key, headingId = null) => {
+    if (projectId === activeProjectId && key === activePage && !headingId) return;
+    if (!await confirmDiscardEdit()) return;
+    if (projectId !== activeProjectId) setActiveProjectId(projectId);
     setActivePage(key);
     leaveEditor();
     scrollToTop();
+    if (headingId) setTimeout(() => document.getElementById(headingId)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
   };
+
+  const goToPage = (key) => {
+    goToProjectPage(activeProjectId, key);
+  };
+
+  const startNewRecord = async () => {
+    if (!await confirmDiscardEdit()) return;
+    setIsAddingData(true);
+    setIsEditingData(false);
+    setHasDirtyEdit(false);
+    setShowProjectSettings(false);
+  };
+
+  const startEditRecord = async () => {
+    if (isEditingData) {
+      if (!await confirmDiscardEdit()) return;
+      leaveEditor();
+      return;
+    }
+    setIsEditingData(true);
+    setIsAddingData(false);
+    setHasDirtyEdit(false);
+    setShowProjectSettings(false);
+  };
+
+  const mapMarks = (currentPageData?.content || []).map((block, index) => {
+    const rawText = block.value || block.caption || block.defaultCode || (block.items || []).join?.(' ') || block.type;
+    const title = block.type === 'heading' ? rawText : currentPageData?.title || block.type;
+    const summary = String(rawText || '').replace(/\s+/g, ' ').trim();
+    return {
+      id: `record-map-${activePage}-${index}`,
+      summary: summary || block.type,
+      title,
+      type: block.type
+    };
+  });
+
+  const commands = (() => {
+    const items = [
+      { id: 'new-record', label: 'New record', meta: 'Create document or project', type: 'ACTION', keywords: 'create add commit', run: startNewRecord },
+      { id: 'edit-record', label: isEditingData ? 'View current record' : 'Edit current record', meta: currentPageData?.title || 'Current document', type: 'ACTION', keywords: 'edit view document', run: startEditRecord },
+      { id: 'pin-record', label: currentPageData?.pinned ? 'Unpin current record' : 'Pin current record', meta: currentPageData?.title || 'Current document', type: 'ACTION', keywords: 'pin favorite order', run: handleTogglePinDocument }
+    ];
+
+    Object.entries(projects).forEach(([projectId, project]) => {
+      orderedPageKeys(project.docs).forEach((pageKey) => {
+        const doc = project.docs[pageKey];
+        items.push({
+          id: `open-${projectId}-${pageKey}`,
+          label: doc.title,
+          meta: `${project.name} / ${doc.subtitle}`,
+          type: 'RECORD',
+          keywords: `${project.name} ${pageKey} ${doc.subtitle} ${(doc.content || []).map((block) => block.value || '').join(' ')}`,
+          run: () => goToProjectPage(projectId, pageKey)
+        });
+        documentHeadings(doc.content, pageKey).forEach((heading) => {
+          items.push({
+            id: `heading-${projectId}-${pageKey}-${heading.id}`,
+            label: heading.title,
+            meta: `${doc.title} / ${project.name}`,
+            type: 'SECTION',
+            keywords: `${project.name} ${doc.title} ${doc.subtitle}`,
+            run: () => goToProjectPage(projectId, pageKey, heading.id)
+          });
+        });
+      });
+    });
+
+    return items;
+  })();
+
+  useEffect(() => {
+    const onKeyDown = (event) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        setCommandOpen(true);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
 
   return (
     <div className="h-full w-full flex justify-center items-center px-2 md:px-6 lg:px-10 animate-fade-in" style={{ zIndex: 10 }}>
       <div 
-        className="w-full max-w-[1400px] h-[90vh] flex shadow-2xl relative"
+        className="archive-shell w-full max-w-[1400px] h-[90vh] flex shadow-2xl relative"
         style={{
           background: 'rgba(0, 0, 0, 0.15)',
           borderRadius: '16px',
@@ -63,7 +158,7 @@ export const SidebarLayout = ({
         }}
       >
         {/* LEFT SIDE: Vertical Staggered Tabs */}
-        <div className="flex flex-col z-10 w-24 md:w-32 shrink-0 -mr-[2px] overflow-y-auto scrollbar-none" style={{ maxHeight: '100%' }}>
+        <div className="archive-tab-rail flex flex-col z-10 w-24 md:w-32 shrink-0 -mr-[2px] overflow-y-auto scrollbar-none" style={{ maxHeight: '100%' }}>
           {pageKeys.map((key, index) => {
             const isActive = activePage === key;
             const doc = activeProject.docs[key];
@@ -74,6 +169,7 @@ export const SidebarLayout = ({
                 key={key}
                 onClick={() => goToPage(key)}
                 className={`
+                  archive-tab
                   flex-none flex flex-col justify-center items-center py-5 px-3 border-2 overflow-hidden
                   transition-all duration-300 ease-in-out relative origin-left cursor-pointer
                   ${isActive ? 'w-full z-20 border-r-0' : 'w-[88%] hover:w-[96%] z-10 ml-auto opacity-70 hover:opacity-100'}
@@ -95,7 +191,7 @@ export const SidebarLayout = ({
                 )}
                 
                 {isActive && (
-                  <div className="absolute top-4 right-2 writing-vertical text-[8px] font-mono-tech opacity-50">
+                  <div className="archive-tab-code absolute top-4 right-2 writing-vertical text-[8px] font-mono-tech opacity-50">
                     {doc.subtitle}
                   </div>
                 )}
@@ -107,7 +203,7 @@ export const SidebarLayout = ({
         {/* RIGHT SIDE: Active Folder Content */}
         <div
           ref={contentRef}
-          className="flex-1 border-2 relative overflow-y-auto transition-colors duration-500 rounded-tr-lg rounded-br-lg"
+          className="archive-content-panel flex-1 border-2 relative overflow-y-auto transition-colors duration-500 rounded-tr-lg rounded-br-lg"
           style={{
             backgroundColor: activeTheme.bgColor,
             color: activeTheme.textColor,
@@ -117,20 +213,21 @@ export const SidebarLayout = ({
           
           {/* Top Bar / Project Switcher */}
           <div 
-            className="sticky top-0 z-30 border-b-2 px-6 py-3 flex items-center justify-between bg-inherit backdrop-blur-md"
+            className="archive-topbar sticky top-0 z-30 border-b-2 px-6 py-3 flex items-center justify-between bg-inherit backdrop-blur-md"
             style={{ borderColor: activeTheme.borderColor }}
           >
             <div className="flex items-center gap-4">
               <div className="relative inline-flex items-center">
                 <select 
                   value={activeProjectId}
-                  onChange={(e) => {
-                    if (!confirmDiscardEdit()) return;
-                  setActiveProjectId(e.target.value);
-                  setActivePage(orderedPageKeys(projects[e.target.value].docs)[0]);
-                  leaveEditor();
-                  setShowProjectSettings(false);
-                }}
+                  aria-label="Active project"
+                  onChange={async (e) => {
+                    if (!await confirmDiscardEdit()) return;
+                    setActiveProjectId(e.target.value);
+                    setActivePage(orderedPageKeys(projects[e.target.value].docs)[0]);
+                    leaveEditor();
+                    setShowProjectSettings(false);
+                  }}
                   className="appearance-none bg-transparent font-serif font-bold text-xl md:text-3xl tracking-tighter uppercase focus:outline-none cursor-pointer border-none pr-8"
                   style={{ color: activeTheme.textColor }}
                 >
@@ -144,14 +241,17 @@ export const SidebarLayout = ({
             </div>
 
             <div className="flex items-center gap-4">
+              <button
+                onClick={() => setCommandOpen(true)}
+                className="p-2 border-2 transition-colors cursor-pointer"
+                style={{ borderColor: activeTheme.textColor, color: activeTheme.textColor }}
+                title="Command Palette"
+                aria-label="Open command palette"
+              >
+                <Search className="w-5 h-5" />
+              </button>
               <button 
-                onClick={() => {
-                  if (!confirmDiscardEdit()) return;
-                  setIsAddingData(!isAddingData);
-                  setIsEditingData(false);
-                  setHasDirtyEdit(false);
-                  setShowProjectSettings(false);
-                }}
+                onClick={startNewRecord}
                 className="p-2 border-2 transition-colors cursor-pointer" 
                 style={{
                   borderColor: activeTheme.textColor,
@@ -178,17 +278,7 @@ export const SidebarLayout = ({
                     <Pin className="w-5 h-5" />
                   </button>
                   <button
-                    onClick={() => {
-                      if (isEditingData) {
-                        if (!confirmDiscardEdit()) return;
-                        leaveEditor();
-                        return;
-                      }
-                      setIsEditingData(true);
-                      setIsAddingData(false);
-                      setHasDirtyEdit(false);
-                      setShowProjectSettings(false);
-                    }}
+                    onClick={startEditRecord}
                     className="p-2 border-2 transition-colors cursor-pointer"
                     style={{
                       borderColor: activeTheme.textColor,
@@ -230,7 +320,7 @@ export const SidebarLayout = ({
           )}
 
           {/* Inner Content Area */}
-          <div className="p-6 md:p-12 lg:p-20 max-w-4xl mx-auto relative min-h-full">
+          <div className="archive-inner p-6 md:p-12 lg:p-20 max-w-4xl mx-auto relative min-h-full">
             
             {isAddingData || isEditingData ? (
               // --- RENDER THE NEW DATA ENTRY FORM ---
@@ -239,13 +329,15 @@ export const SidebarLayout = ({
                 onSave={isEditingData ? handleUpdateDocument : handleSaveNewData}
                 onDelete={isEditingData ? handleDeleteDocument : undefined}
                 onDirtyChange={isEditingData ? setHasDirtyEdit : undefined}
-                onCancel={() => {
-                  if (!confirmDiscardEdit()) return;
+                onCancel={async () => {
+                  if (!await confirmDiscardEdit()) return;
                   leaveEditor();
                 }}
                 activeColorTheme={activeTheme}
                 activeProject={activeProject}
+                confirmAction={confirmAction}
                 mode={isEditingData ? 'edit' : 'create'}
+                notify={notify}
                 renderContent={renderContent}
                 initialData={isEditingData ? {
                   recordType: 'document',
@@ -267,14 +359,49 @@ export const SidebarLayout = ({
                   </div>
                 </div>
 
+                <h1 className="font-display mb-6 max-w-[70%] text-3xl font-bold uppercase leading-tight md:text-5xl" style={{ letterSpacing: '-0.03em' }}>
+                  {currentPageData?.title}
+                </h1>
+
+                {!!mapMarks.length && (
+                  <nav className="section-map-rail" aria-label="Record map">
+                    {mapMarks.map((mark, markIndex) => (
+                      <div key={mark.id} className="section-map-rail__item">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActiveMapIndex(markIndex);
+                            document.getElementById(mark.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                          }}
+                          className={`section-map-rail__mark ${mark.type === 'heading' ? 'is-heading' : ''} ${markIndex === activeMapIndex ? 'is-current' : ''}`}
+                          title={mark.title}
+                          aria-label={`Jump to ${mark.title}`}
+                        />
+                        <div className="section-map-preview" role="tooltip">
+                          <div className="section-map-preview__title">{mark.title}</div>
+                          <div className="section-map-preview__summary">{mark.summary}</div>
+                          <div className="section-map-preview__meta">
+                            <span>{mark.type}</span>
+                            <span>{markIndex + 1}/{mapMarks.length}</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </nav>
+                )}
+
                 {/* Page Content */}
-                <div className="mt-12 md:mt-0 relative z-10 animate-fade-in">
-                  {currentPageData?.content.map((block, index) => renderContent(block, index, { interactive: true }))}
+                <div className="mt-12 md:mt-0 relative z-10 animate-fade-in" style={{ minHeight: STICKER_STAGE_HEIGHT }}>
+                  {currentPageData?.content.map((block, index) => (
+                    <div id={`record-map-${activePage}-${index}`} key={index} className="scroll-mt-28">
+                      {renderContent(block, index, { interactive: true })}
+                    </div>
+                  ))}
                 </div>
 
                 {/* Brutalist Pagination Footer */}
                 <div 
-                  className="mt-24 pt-8 border-t-4 grid grid-cols-2 gap-4 pb-12"
+                  className="archive-footer mt-24 pt-8 border-t-4 grid grid-cols-2 gap-4 pb-12"
                   style={{ borderColor: activeTheme.textColor }}
                 >
                   {prevPageKey ? (
@@ -305,6 +432,7 @@ export const SidebarLayout = ({
         </div>
 
       </div>
+      <CommandPalette commands={commands} onClose={() => setCommandOpen(false)} open={commandOpen} theme={activeTheme} />
     </div>
   );
 };

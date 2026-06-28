@@ -1,6 +1,6 @@
 const LEGACY_WIDTH = 800;
 const LEGACY_HEIGHT = 600;
-const STICKER_STAGE_HEIGHT = 720;
+export const STICKER_STAGE_HEIGHT = 720;
 
 const clamp = (value, min = 0, max = 100) => Math.min(max, Math.max(min, value));
 const round = (value) => Number(value.toFixed(2));

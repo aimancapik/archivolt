@@ -5,6 +5,7 @@ import { syntaxHighlight, formatCode } from '../utils/helpers';
 export const LiveRunner = ({ defaultCode }) => {
   const [code, setCode] = useState(defaultCode);
   const [output, setOutput] = useState(defaultCode);
+  const [runStatus, setRunStatus] = useState('SYNCED');
   const preRef = useRef(null);
 
   const handleScroll = (e) => {
@@ -17,6 +18,7 @@ export const LiveRunner = ({ defaultCode }) => {
   const handleFormat = () => {
     const formatted = formatCode(code);
     setCode(formatted);
+    setRunStatus('MODIFIED');
   };
 
   const handleKeyDown = (e) => {
@@ -37,11 +39,15 @@ export const LiveRunner = ({ defaultCode }) => {
               className="runner-execute-btn cursor-pointer"
               style={{ background: 'transparent', color: '#e4decd', borderColor: 'rgba(255,255,255,0.15)', boxShadow: 'none' }}
               title="Format Code (Shift + Alt + F)"
+              aria-label="Format code"
             >
               FORMAT
             </button>
             <button
-              onClick={() => setOutput(code)}
+              onClick={() => {
+                setOutput(code);
+                setRunStatus('EXECUTED');
+              }}
               className="runner-execute-btn cursor-pointer"
             >
               <Play className="w-3 h-3" fill="currentColor" /> EXECUTE
@@ -57,9 +63,13 @@ export const LiveRunner = ({ defaultCode }) => {
           />
           <textarea
             value={code}
-            onChange={(e) => setCode(e.target.value)}
+            onChange={(e) => {
+              setCode(e.target.value);
+              setRunStatus('MODIFIED');
+            }}
             onScroll={handleScroll}
             onKeyDown={handleKeyDown}
+            aria-label="Live runner code"
             className="absolute inset-0 w-full h-full p-4 font-mono-tech bg-transparent resize-none focus:outline-none overflow-auto whitespace-pre"
             style={{ fontSize: '13px', lineHeight: '1.65', color: 'transparent', caretColor: 'white' }}
             spellCheck="false"
@@ -67,8 +77,9 @@ export const LiveRunner = ({ defaultCode }) => {
         </div>
       </div>
       <div className="flex-1 flex flex-col" style={{ background: '#fff', color: '#111' }}>
-        <div className="px-4 py-2 font-mono-tech font-bold uppercase" style={{ fontSize: '9px', letterSpacing: '0.15em', background: '#e4decd', borderBottom: '1px solid rgba(0,0,0,0.1)' }}>
-          OUTPUT_RENDER
+        <div className="flex items-center justify-between px-4 py-2 font-mono-tech font-bold uppercase" style={{ fontSize: '9px', letterSpacing: '0.15em', background: '#e4decd', borderBottom: '1px solid rgba(0,0,0,0.1)' }}>
+          <span>OUTPUT_RENDER</span>
+          <span>{runStatus}</span>
         </div>
         <div className="flex-1 relative" style={{ minHeight: '250px' }}>
           <iframe title="Preview" srcDoc={output} className="absolute inset-0 w-full h-full border-none" sandbox="allow-scripts allow-modals" />
@@ -77,4 +88,3 @@ export const LiveRunner = ({ defaultCode }) => {
     </div>
   );
 };
-

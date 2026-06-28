@@ -3,7 +3,7 @@ import { X, GripVertical, Trash2, Save, Plus, Image, ChevronUp, ChevronDown, Rot
 import { cn } from '../utils/helpers';
 import { checklistItemsFromText, checklistTextFromItems } from '../utils/checklist';
 import { markdownToBlocks } from '../utils/markdownToBlocks';
-import { normalizeSticker, pointerToStickerPoint, stickerPlacementStyle } from '../utils/stickerPlacement';
+import { normalizeSticker, pointerToStickerPoint, STICKER_STAGE_HEIGHT, stickerPlacementStyle } from '../utils/stickerPlacement';
 
 const stickerFromContent = (sticker, index) => {
   const normalized = normalizeSticker(sticker);
@@ -114,7 +114,7 @@ const ARCHIVOLT_PROMPT = [
   '[paste code/function/file here]'
 ].join('\n');
 
-export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activeColorTheme: theme, activeProject, initialData = null, mode = 'create', renderContent }) => {
+export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activeColorTheme: theme, activeProject, confirmAction, initialData = null, mode = 'create', notify = () => {}, renderContent }) => {
   const isEditing = mode === 'edit';
   // Form States
   const [recordType, setRecordType] = useState(initialData?.recordType || 'document');
@@ -124,6 +124,7 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
   const [isSaving, setIsSaving] = useState(false);
   const [markdownInput, setMarkdownInput] = useState('');
   const [promptCopied, setPromptCopied] = useState(false);
+  const [collapsedBlockIds, setCollapsedBlockIds] = useState(() => new Set());
 
   // Blocks list state - initialized with a Heading block and a Text block
   const [blocks, setBlocks] = useState(() => {
@@ -157,6 +158,23 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
   const [dragReadyBlockId, setDragReadyBlockId] = useState(null);
   const hasStickerBlock = blocks.some((block) => block.type === 'stickers');
 
+  const blockSummary = (block) => {
+    if (block.type === 'stickers') return `${block.stickers?.filter((sticker) => sticker.placed).length || 0}/${block.stickers?.length || 0} placed`;
+    if (block.type === 'image') return block.file?.name || block.url || 'No image';
+    return (block.value || block.type).replace(/\s+/g, ' ').slice(0, 42);
+  };
+
+  const toggleBlockCollapsed = (id) => {
+    setCollapsedBlockIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const clampPercent = (value) => Math.min(100, Math.max(0, Number(value) || 0));
+
   useEffect(() => {
     onDirtyChange?.(currentSignature !== initialSignature);
   }, [currentSignature, initialSignature, onDirtyChange]);
@@ -165,7 +183,7 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
   const addBlock = (type) => {
     let defaultVal = '';
     if (type === 'playground') {
-      defaultVal = "<style>\n  body { background: #111; color: #e4decd; font-family: monospace; padding: 2rem; }\n  button { background: #e4decd; color: #111; border: 1px solid #111; padding: 0.5rem 1rem; cursor: pointer; font-weight: bold; box-shadow: 2px 2px 0px #000; transition: all 0.1s ease; }\n  button:hover { background: #f0ebd9; transform: translate(-1px, -1px); box-shadow: 3px 3px 0px #000; }\n  button:active { background: #c3baa2; transform: translate(1px, 1px); box-shadow: 1px 1px 0px #000; }\n</style>\n\n<h1>>> READY</h1>\n<button onclick=\"alert('RUNNING')\">CLICK</button>";
+      defaultVal = "<style>\n  body { background: #111; color: #e4decd; font-family: monospace; padding: 2rem; }\n  button { background: #e4decd; color: #111; border: 1px solid #111; padding: 0.5rem 1rem; cursor: pointer; font-weight: bold; box-shadow: 2px 2px 0px #000; transition: all 0.1s ease; }\n  button:hover { background: #f0ebd9; transform: translate(-1px, -1px); box-shadow: 3px 3px 0px #000; }\n  button:active { background: #c3baa2; transform: translate(1px, 1px); box-shadow: 1px 1px 0px #000; }\n</style>\n\n<h1>>> READY</h1>\n<p id=\"state\">IDLE</p>\n<button onclick=\"document.getElementById('state').textContent='RUNNING'\">CLICK</button>";
     }
     if (type === 'list') {
       defaultVal = 'First item\nSecond item';
@@ -184,18 +202,24 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
     setBlocks((prev) => [...prev, newBlock]);
   };
 
-  const importMarkdown = () => {
+  const importMarkdown = async () => {
     if (!markdownInput.trim()) {
-      alert('ERROR: MARKDOWN INPUT IS EMPTY.');
+      notify('Markdown input is empty', 'danger');
       return;
     }
-    if (blocks.length && !confirm('Replace current unsaved blocks with imported Markdown?')) return;
+    if (blocks.length && confirmAction && !await confirmAction({
+      title: 'Import markdown',
+      message: 'Replace current unsaved blocks with imported Markdown?',
+      confirmText: 'Import'
+    })) return;
     setBlocks(markdownToBlocks(markdownInput));
+    notify('Markdown imported', 'success');
   };
 
   const copyArchivoltPrompt = () => {
     navigator.clipboard.writeText(ARCHIVOLT_PROMPT).then(() => {
       setPromptCopied(true);
+      notify('Prompt copied', 'success');
       setTimeout(() => setPromptCopied(false), 2000);
     }).catch(() => {
       const ta = document.createElement('textarea');
@@ -205,6 +229,7 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
       document.execCommand('copy');
       document.body.removeChild(ta);
       setPromptCopied(true);
+      notify('Prompt copied', 'success');
       setTimeout(() => setPromptCopied(false), 2000);
     });
   };
@@ -293,6 +318,14 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
     });
   };
 
+  const nudgeSelectedSticker = (blockId, sticker, dx, dy) => {
+    updateSelectedSticker(blockId, {
+      x: clampPercent(Number(sticker.x ?? 50) + dx),
+      y: clampPercent(Number(sticker.y ?? 50) + dy),
+      placed: true
+    });
+  };
+
   // HTML5 Drag Handlers
   const handleDragStart = (index) => {
     setDraggedIndex(index);
@@ -318,30 +351,30 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!pageTitle.trim()) {
-      alert("ERROR: PAGE_TITLE IS A REQUIRED FIELD.");
+      notify('PAGE_TITLE is required', 'danger');
       return;
     }
     if (recordType === 'project' && !projectName.trim()) {
-      alert("ERROR: DIRECTORY_NAME IS A REQUIRED FIELD.");
+      notify('DIRECTORY_NAME is required', 'danger');
       return;
     }
     if (blocks.length === 0) {
-      alert("ERROR: AT LEAST ONE CONTENT BLOCK IS REQUIRED.");
+      notify('At least one content block is required', 'danger');
       return;
     }
 
     // Validate that all blocks have content
     for (let i = 0; i < blocks.length; i++) {
       if (['image', 'sticker'].includes(blocks[i].type) && !blocks[i].file && !blocks[i].url) {
-        alert(`ERROR: BLOCK #${i + 1} NEEDS AN IMAGE FILE.`);
+        notify(`Block #${i + 1} needs an image file`, 'danger');
         return;
       }
       if (blocks[i].type === 'stickers' && !blocks[i].stickers?.some((sticker) => sticker.placed)) {
-        alert(`ERROR: BLOCK #${i + 1} NEEDS AT LEAST ONE PLACED STICKER.`);
+        notify(`Block #${i + 1} needs at least one placed sticker`, 'danger');
         return;
       }
       if (!['image', 'sticker', 'stickers', 'demo-input'].includes(blocks[i].type) && !blocks[i].value.trim()) {
-        alert(`ERROR: BLOCK #${i + 1} (${blocks[i].type.toUpperCase()}) CANNOT BE EMPTY.`);
+        notify(`Block #${i + 1} (${blocks[i].type.toUpperCase()}) cannot be empty`, 'danger');
         return;
       }
     }
@@ -356,7 +389,7 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
         blocks
       });
     } catch (error) {
-      alert(`ERROR: ${error.message}`);
+      notify(error.message, 'danger');
     } finally {
       setIsSaving(false);
     }
@@ -371,12 +404,12 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
             {isEditing ? 'EDITING CURRENT DOCUMENT' : recordType === 'document' ? `AWAITING NEW DOCUMENT LOG FOR ${activeProject ? activeProject.name : ''}` : 'AWAITING NEW DIRECTORY INPUT...'}
           </p>
         </div>
-        <button type="button" onClick={onCancel} className="p-2 transition-colors cursor-pointer" style={{ border: `1px solid ${theme.textColor}`, background: 'transparent', color: 'inherit' }}>
+        <button type="button" onClick={onCancel} className="p-2 transition-colors cursor-pointer" style={{ border: `1px solid ${theme.textColor}`, background: 'transparent', color: 'inherit' }} aria-label="Close editor">
           <X className="w-5 h-5" />
         </button>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-6">
+      <form onSubmit={handleSubmit} className="space-y-6" aria-label="Data entry form">
         {/* Record Type Selector */}
         {!isEditing && <div className="space-y-2 mb-6">
           <label className="font-mono-tech uppercase font-bold block" style={{ fontSize: '9px', letterSpacing: '0.12em' }}>RECORD_TYPE</label>
@@ -405,6 +438,7 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
             <div className="space-y-2">
               <label className="font-mono-tech uppercase font-bold block" style={{ fontSize: '9px', letterSpacing: '0.12em' }}>TARGET_PROJECT</label>
               <input type="text" disabled value={activeProject ? activeProject.name : ''}
+                aria-label="Target project"
                 className="w-full p-3 bg-transparent font-mono-tech focus:outline-none uppercase opacity-60"
                 style={{ border: `1px dashed ${theme.textColor}`, fontSize: '13px', cursor: 'not-allowed' }} />
             </div>
@@ -413,6 +447,7 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
               <label className="font-mono-tech uppercase font-bold block" style={{ fontSize: '9px', letterSpacing: '0.12em' }}>DIRECTORY_NAME</label>
               <input type="text" required placeholder="e.g. SYSTEM_CORE" value={projectName}
                 onChange={(e) => setProjectName(e.target.value)}
+                aria-label="Directory name"
                 className="w-full p-3 bg-transparent font-mono-tech focus:outline-none uppercase"
                 style={{ border: `1px solid ${theme.textColor}`, fontSize: '13px', color: 'inherit' }} />
             </div>
@@ -424,6 +459,7 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
             </label>
             <input type="text" value={version}
               onChange={(e) => setVersion(e.target.value)}
+              aria-label={recordType === 'document' ? 'Subtitle stamp' : 'Version tag'}
               className="w-full p-3 bg-transparent font-mono-tech focus:outline-none uppercase"
               style={{ border: `1px solid ${theme.textColor}`, fontSize: '13px', color: 'inherit' }} />
           </div>
@@ -433,6 +469,7 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
           <label className="font-mono-tech uppercase font-bold block" style={{ fontSize: '9px', letterSpacing: '0.12em' }}>PAGE_TITLE</label>
           <input type="text" required value={pageTitle}
             onChange={(e) => setPageTitle(e.target.value)}
+            aria-label="Page title"
             className="w-full p-3 bg-transparent font-mono-tech focus:outline-none uppercase"
             style={{ border: `1px solid ${theme.textColor}`, fontSize: '13px', color: 'inherit' }} />
         </div>
@@ -444,6 +481,7 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
           <div className="block-editor-list">
             {blocks.map((block, index) => {
               const isDragged = draggedIndex === index;
+              const isCollapsed = collapsedBlockIds.has(block.id);
               const selectedSticker = block.stickers?.find((sticker) => sticker.id === block.selectedStickerId);
 
               return (
@@ -470,6 +508,18 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
 
                   {/* Block content editor */}
                   <div className="flex-1 min-w-0">
+                    <button
+                      type="button"
+                      onClick={() => toggleBlockCollapsed(block.id)}
+                      className="mb-3 flex w-full items-center justify-between gap-3 text-left font-mono-tech uppercase"
+                      style={{ color: 'inherit' }}
+                      aria-expanded={!isCollapsed}
+                    >
+                      <span className="text-[10px] font-bold">{block.type}</span>
+                      <span className="min-w-0 flex-1 truncate text-[10px] opacity-45">{blockSummary(block)}</span>
+                      {isCollapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+                    </button>
+                    <div hidden={isCollapsed}>
                     {block.type === 'heading' && (
                       <div>
                         <label className="font-mono-tech block text-[9px] uppercase opacity-45 mb-1">HEADING</label>
@@ -477,6 +527,7 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
                           type="text"
                           value={block.value}
                           onChange={(e) => updateBlockValue(block.id, e.target.value)}
+                          aria-label={`Heading block ${index + 1}`}
                           className="w-full p-2 bg-transparent font-serif font-bold uppercase focus:outline-none"
                           style={{ borderBottom: `1px solid ${theme.textColor}`, fontSize: '15px', color: 'inherit' }}
                           placeholder="SECTION HEADING..."
@@ -491,6 +542,7 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
                         <textarea
                           value={block.value}
                           onChange={(e) => updateBlockValue(block.id, e.target.value)}
+                          aria-label={`Text block ${index + 1}`}
                           className="w-full p-2 bg-transparent font-mono-tech focus:outline-none resize-y"
                           style={{ borderBottom: `1px solid ${theme.textColor}`, fontSize: '13px', minHeight: '60px', color: 'inherit' }}
                           placeholder="Write notes or description here..."
@@ -508,6 +560,7 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
                             <select
                               value={block.language || 'javascript'}
                               onChange={(e) => updateBlockLanguage(block.id, e.target.value)}
+                              aria-label={`Code language for block ${index + 1}`}
                               className="bg-transparent font-mono-tech focus:outline-none uppercase cursor-pointer"
                               style={{ color: 'inherit' }}
                             >
@@ -522,6 +575,7 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
                         <textarea
                           value={block.value}
                           onChange={(e) => updateBlockValue(block.id, e.target.value)}
+                          aria-label={`Code block ${index + 1}`}
                           className="w-full p-3 font-mono-tech focus:outline-none resize-y"
                           style={{
                             background: 'rgba(0,0,0,0.3)',
@@ -543,6 +597,7 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
                         <textarea
                           value={block.value}
                           onChange={(e) => updateBlockValue(block.id, e.target.value)}
+                          aria-label={`Playground block ${index + 1}`}
                           className="w-full p-3 font-mono-tech focus:outline-none resize-y"
                           style={{
                             background: 'rgba(0,0,0,0.3)',
@@ -564,6 +619,7 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
                         <textarea
                           value={block.value}
                           onChange={(e) => updateBlockValue(block.id, e.target.value)}
+                          aria-label={`List block ${index + 1}`}
                           className="w-full p-2 bg-transparent font-mono-tech focus:outline-none resize-y"
                           style={{ borderBottom: `1px solid ${theme.textColor}`, fontSize: '13px', minHeight: '80px', color: 'inherit' }}
                           placeholder="One item per line..."
@@ -599,6 +655,7 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
                                 type="text"
                                 value={item.text}
                                 onChange={(e) => updateChecklistItems(block.id, (items) => items.map((nextItem, index) => index === itemIndex ? { ...nextItem, text: e.target.value } : nextItem))}
+                                aria-label={`Checklist item ${itemIndex + 1}`}
                                 className="min-w-0 flex-1 p-2 bg-transparent font-mono-tech focus:outline-none"
                                 style={{ borderBottom: `1px solid ${theme.borderColor}`, fontSize: '13px', color: 'inherit', textDecoration: item.checked ? 'line-through' : 'none', opacity: item.checked ? 0.6 : 1 }}
                                 placeholder="Checklist item..."
@@ -639,6 +696,7 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
                           type="file"
                           accept="image/*"
                           onChange={(e) => updateBlockFile(block.id, e.target.files[0])}
+                          aria-label={`Image file for block ${index + 1}`}
                           className="sr-only"
                         />
                         <div className="flex flex-wrap items-center gap-3">
@@ -657,6 +715,7 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
                           type="text"
                           value={block.value}
                           onChange={(e) => updateBlockValue(block.id, e.target.value)}
+                          aria-label={`Image caption for block ${index + 1}`}
                           className="w-full mt-2 p-2 bg-transparent font-mono-tech focus:outline-none"
                           style={{ borderBottom: `1px solid ${theme.textColor}`, fontSize: '12px', color: 'inherit' }}
                           placeholder="Caption..."
@@ -674,6 +733,7 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
                             accept="image/*"
                             multiple
                             onChange={(e) => addStickerFiles(block.id, e.target.files)}
+                            aria-label={`Sticker files for block ${index + 1}`}
                             className="sr-only"
                           />
                           <label
@@ -737,11 +797,21 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
                               placeSelectedSticker(block.id, e.currentTarget, e.clientX, e.clientY);
                             }}
                             onKeyDown={(e) => {
+                              if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+                                if (!selectedSticker) return;
+                                e.preventDefault();
+                                const step = e.shiftKey ? 5 : 1;
+                                const dx = e.key === 'ArrowLeft' ? -step : e.key === 'ArrowRight' ? step : 0;
+                                const dy = e.key === 'ArrowUp' ? -step : e.key === 'ArrowDown' ? step : 0;
+                                nudgeSelectedSticker(block.id, selectedSticker, dx, dy);
+                                return;
+                              }
                               if (e.key !== 'Enter' && e.key !== ' ') return;
                               e.preventDefault();
                               if (selectedSticker) updateSelectedSticker(block.id, { x: 50, y: 50, placed: true });
                             }}
-                            className="relative min-h-[720px] select-none"
+                            className="relative select-none"
+                            style={{ minHeight: STICKER_STAGE_HEIGHT }}
                             aria-label="Place selected sticker"
                           >
                             {!selectedSticker && (
@@ -833,6 +903,7 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
                         INTERACTIVE INPUT DEMO
                       </div>
                     )}
+                    </div>
                   </div>
 
                   {/* Reorder and delete controls */}
@@ -843,6 +914,7 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
                       className="block-action-btn cursor-pointer"
                       style={{ color: '#ff5f57', borderColor: 'rgba(255,95,87,0.3)' }}
                       title="Delete Block"
+                      aria-label={`Delete block ${index + 1}`}
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
@@ -931,6 +1003,7 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
             <textarea
               value={markdownInput}
               onChange={(e) => setMarkdownInput(e.target.value)}
+              aria-label="Import markdown"
               className="w-full p-3 bg-transparent font-mono-tech focus:outline-none resize-y"
               style={{ border: `1px dashed ${theme.textColor}`, fontSize: '12px', minHeight: '110px', color: 'inherit' }}
               placeholder={"# Function Name\nPaste AI-generated Markdown here..."}
@@ -954,7 +1027,10 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
               </button>
               <button
                 type="button"
-                onClick={() => setMarkdownInput('')}
+                onClick={() => {
+                  setMarkdownInput('');
+                  notify('Markdown input cleared');
+                }}
                 className="px-4 py-2 border font-mono-tech text-xs cursor-pointer hover:bg-[rgba(255,255,255,0.05)] transition-colors"
                 style={{ borderColor: theme.borderColor, color: theme.textColor, borderRadius: '4px', background: 'transparent' }}
               >
@@ -964,7 +1040,7 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
           </div>
         </div>
 
-        <div className="flex flex-col md:flex-row gap-3">
+        <div className="sticky bottom-0 z-30 flex flex-col gap-3 border-t py-3 backdrop-blur md:flex-row" style={{ borderColor: theme.borderColor, background: theme.bgColor }}>
           <button type="submit"
             disabled={isSaving}
             className="flex-1 py-4 bg-transparent font-display font-bold uppercase flex items-center justify-center gap-2 transition-all cursor-pointer"

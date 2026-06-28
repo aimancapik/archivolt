@@ -34,7 +34,7 @@ export const CodeBlock = ({ language, code }) => {
           </div>
           <span className="font-mono-tech uppercase" style={{ fontSize: '9px', letterSpacing: '0.15em', color: '#555' }}>{language}</span>
         </div>
-        <button onClick={handleCopy} className="p-1 transition-colors cursor-pointer" style={{ color: '#555' }}>
+        <button onClick={handleCopy} className="p-1 transition-colors cursor-pointer" style={{ color: '#555' }} aria-label="Copy code">
           {copied ? <Check className="w-3.5 h-3.5" style={{ color: '#28c840' }} /> : <Copy className="w-3.5 h-3.5" />}
         </button>
       </div>

@@ -12,11 +12,12 @@ export const InteractiveInputDemo = () => {
           type="text" 
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
+          aria-label="Override code"
           placeholder="ENTER OVERRIDE CODE..."
           className="flex-1 px-4 py-3 bg-transparent font-mono-tech focus:outline-none"
           style={{ fontSize: '13px', color: 'inherit' }}
         />
-        <button className="px-6 py-3 font-display font-bold transition-opacity cursor-pointer" style={{ background: 'currentColor', color: 'white', mixBlendMode: 'difference', borderLeft: '1px solid rgba(255,255,255,0.15)', fontSize: '12px' }}>
+        <button className="px-6 py-3 font-display font-bold transition-opacity cursor-pointer" style={{ background: 'currentColor', color: 'white', mixBlendMode: 'difference', borderLeft: '1px solid rgba(255,255,255,0.15)', fontSize: '12px' }} aria-label="Send override code">
           SEND
         </button>
       </div>

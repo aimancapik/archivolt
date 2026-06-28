@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { CodeBlock } from './components/CodeBlock';
+import { useFeedback } from './hooks/useFeedback.jsx';
 import { InteractiveInputDemo } from './components/InteractiveInputDemo';
 import { LiveRunner } from './components/LiveRunner';
 import { SidebarLayout } from './layouts/SidebarLayout';
 import { isSupabaseConfigured } from './lib/supabase';
 import { loadRemoteProjects, saveRemoteProjects, uploadImage } from './lib/archiveStore';
 import { checklistItemsFromText } from './utils/checklist';
+import { headingDomId } from './utils/documentStructure';
 import { orderedPageKeys } from './utils/pageOrder';
 import { normalizeSticker, stickerPlacementStyle } from './utils/stickerPlacement';
 
@@ -94,7 +96,7 @@ const initialProjectsData = {
         subtitle: "CODE_004 // LIVE",
         content: [
           { type: 'text', value: "WARNING: Live code execution environment. Proceed with caution." },
-          { type: 'playground', defaultCode: "<style>\n  body { background: #111; color: #e4decd; font-family: monospace; padding: 2rem; }\n  button { background: #e4decd; color: #111; border: 1px solid #111; padding: 0.5rem 1rem; cursor: pointer; font-weight: bold; box-shadow: 2px 2px 0px #000; transition: all 0.1s ease; }\n  button:hover { background: #f0ebd9; transform: translate(-1px, -1px); box-shadow: 3px 3px 0px #000; }\n  button:active { background: #c3baa2; transform: translate(1px, 1px); box-shadow: 1px 1px 0px #000; }\n</style>\n\n<h1>>> TERMINAL READY</h1>\n<p>System awaiting manual override.</p>\n<button onclick=\"alert('OVERRIDE ACCEPTED')\">EXECUTE</button>" }
+          { type: 'playground', defaultCode: "<style>\n  body { background: #111; color: #e4decd; font-family: monospace; padding: 2rem; }\n  button { background: #e4decd; color: #111; border: 1px solid #111; padding: 0.5rem 1rem; cursor: pointer; font-weight: bold; box-shadow: 2px 2px 0px #000; transition: all 0.1s ease; }\n  button:hover { background: #f0ebd9; transform: translate(-1px, -1px); box-shadow: 3px 3px 0px #000; }\n  button:active { background: #c3baa2; transform: translate(1px, 1px); box-shadow: 1px 1px 0px #000; }\n</style>\n\n<h1>>> TERMINAL READY</h1>\n<p id=\"signal\">System awaiting manual override.</p>\n<button onclick=\"document.getElementById('signal').textContent='OVERRIDE ACCEPTED'\">EXECUTE</button>" }
         ]
       },
       changelog: {
@@ -190,6 +192,7 @@ export default function App() {
   const nextPageKey = currentIndex < pageKeys.length - 1 ? pageKeys[currentIndex + 1] : null;
   const currentPageData = activeProject?.docs[activePage] || (activeProject ? Object.values(activeProject.docs)[0] : null);
   const activeTheme = PALETTE[currentIndex >= 0 ? currentIndex % PALETTE.length : 0];
+  const feedback = useFeedback(activeTheme);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
@@ -273,6 +276,7 @@ export default function App() {
       setActivePage(newPageId);
       setIsAddingData(false);
       setIsEditingData(false);
+      feedback.notify('Record committed', 'success');
     } else {
       const newId = formData.projectName.toLowerCase().replace(/\s+/g, '-');
       const content = await buildContentBlocks(formData, `${newId}/index`);
@@ -296,6 +300,7 @@ export default function App() {
       setActivePage('index');
       setIsAddingData(false);
       setIsEditingData(false);
+      feedback.notify('Directory created', 'success');
     }
   };
 
@@ -318,14 +323,21 @@ export default function App() {
     });
     setIsEditingData(false);
     setIsAddingData(false);
+    feedback.notify('Record updated', 'success');
   };
 
-  const handleDeleteDocument = () => {
+  const handleDeleteDocument = async () => {
     if (!activeProject || pageKeys.length <= 1) {
-      alert('ERROR: PROJECT NEEDS AT LEAST ONE DOCUMENT.');
+      feedback.notify('Project needs at least one document', 'danger');
       return;
     }
-    if (!confirm(`Are you sure you want to delete this document: "${currentPageData.title}"?`)) return;
+    const confirmed = await feedback.confirmAction({
+      title: 'Delete record',
+      message: `Delete "${currentPageData.title}" from ${activeProject.name}?`,
+      confirmText: 'Delete',
+      tone: 'danger'
+    });
+    if (!confirmed) return;
 
     const nextPage = nextPageKey || prevPageKey;
     setProjects((prev) => {
@@ -340,15 +352,22 @@ export default function App() {
     setActivePage(nextPage);
     setIsAddingData(false);
     setIsEditingData(false);
+    feedback.notify('Record deleted', 'success');
   };
 
-  const handleDeleteProject = () => {
+  const handleDeleteProject = async () => {
     const projectIds = Object.keys(projects);
     if (projectIds.length <= 1) {
-      alert('ERROR: ARCHIVE NEEDS AT LEAST ONE PROJECT.');
+      feedback.notify('Archive needs at least one project', 'danger');
       return;
     }
-    const typedName = prompt(`Type "${activeProject.name}" to delete this project and all documents.`);
+    const typedName = await feedback.promptAction({
+      title: 'Delete directory',
+      message: `Type "${activeProject.name}" to delete this project and all documents.`,
+      confirmText: 'Delete',
+      inputLabel: 'Directory name',
+      tone: 'danger'
+    });
     if (typedName !== activeProject.name) return;
 
     const nextProjectId = projectIds.find((id) => id !== activeProjectId);
@@ -361,10 +380,12 @@ export default function App() {
     setActivePage(Object.keys(projects[nextProjectId].docs)[0]);
     setIsAddingData(false);
     setIsEditingData(false);
+    feedback.notify('Directory deleted', 'success');
   };
 
   const handleTogglePinDocument = () => {
     if (!activeProject?.docs?.[activePage]) return;
+    const willPin = !activeProject.docs[activePage].pinned;
     setProjects((prev) => {
       const next = { ...prev };
       const project = { ...next[activeProjectId] };
@@ -378,6 +399,7 @@ export default function App() {
       next[activeProjectId] = project;
       return next;
     });
+    feedback.notify(willPin ? 'Record pinned' : 'Record unpinned', 'success');
   };
 
   const toggleChecklistItem = (blockIndex, itemIndex) => {
@@ -401,7 +423,7 @@ export default function App() {
       case 'text':
         return <p key={index} className="font-mono-tech leading-relaxed mb-6" style={{ opacity: 0.85, fontSize: '14px' }}>{block.value}</p>;
       case 'heading':
-        return <h2 key={index} className="font-serif font-bold mt-8 mb-3 pb-1.5 inline-block" style={{ fontSize: 'clamp(1.35rem, 2.4vw, 1.85rem)', borderBottom: '2px solid currentColor' }}>{block.value}</h2>;
+        return <h2 id={headingDomId(activePage, index, block.value)} key={index} className="font-serif font-bold mt-8 mb-3 pb-1.5 inline-block scroll-mt-28" style={{ fontSize: 'clamp(1.35rem, 2.4vw, 1.85rem)', borderBottom: '2px solid currentColor' }}>{block.value}</h2>;
       case 'code':
         return <CodeBlock key={index} language={block.language} code={block.value} />;
       case 'demo-input':
@@ -458,6 +480,7 @@ export default function App() {
                   checked={item.checked}
                   readOnly={!interactive}
                   onChange={() => interactive && toggleChecklistItem(index, i)}
+                  aria-label={item.checked ? 'Mark checklist item incomplete' : 'Mark checklist item complete'}
                   className="mt-0.5 h-4 w-4 accent-current cursor-pointer"
                 />
                   <span style={{ textDecoration: item.checked ? 'line-through' : 'none', opacity: item.checked ? 0.65 : 1 }}>{item.text}</span>
@@ -498,6 +521,8 @@ export default function App() {
           handleDeleteDocument={handleDeleteDocument}
           handleDeleteProject={handleDeleteProject}
           handleTogglePinDocument={handleTogglePinDocument}
+          confirmAction={feedback.confirmAction}
+          notify={feedback.notify}
           orderedPageKeys={orderedPageKeys}
           renderContent={renderContent}
         />
@@ -523,6 +548,7 @@ export default function App() {
           </div>
         </div>
       )}
+      {feedback.node}
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { normalizeSticker, pointerToStickerPoint, stickerPlacementStyle } from './stickerPlacement.js';
+import { normalizeSticker, pointerToStickerPoint, STICKER_STAGE_HEIGHT, stickerPlacementStyle } from './stickerPlacement.js';
 
 assert.deepEqual(normalizeSticker({ x: 400, y: 300, width: 160, rotation: '15' }), {
   x: 50,
@@ -15,3 +15,4 @@ assert.deepEqual(pointerToStickerPoint(30, 60, { left: 10, top: 20, width: 80, h
 
 assert.equal(stickerPlacementStyle({ x: 25, y: 75, width: 12 }).left, '25%');
 assert.equal(stickerPlacementStyle({ x: 25, y: 75, width: 12 }).top, '540px');
+assert.equal(stickerPlacementStyle({ y: 100 }).top, `${STICKER_STAGE_HEIGHT}px`);
