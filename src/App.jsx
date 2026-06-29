@@ -206,7 +206,10 @@ export default function App() {
   const [isAddingData, setIsAddingData] = useState(false);
   const [isEditingData, setIsEditingData] = useState(false);
   const initialProjectsRef = React.useRef(projects);
+  const latestProjectsRef = React.useRef(projects);
   const stickerDragOffsetRef = React.useRef({ x: 0, y: 0 });
+  const isStickerDraggingRef = React.useRef(false);
+  const stickerDragDirtyRef = React.useRef(false);
 
   const visibleProjects = sharedProjects || projects;
   const activeProject = visibleProjects[activeProjectId];
@@ -222,9 +225,10 @@ export default function App() {
   const feedback = useFeedback(activeTheme);
 
   useEffect(() => {
+    latestProjectsRef.current = projects;
     if (shareTarget?.shareId) return;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
-    if (remoteReady) {
+    if (remoteReady && !isStickerDraggingRef.current && !stickerDragDirtyRef.current) {
       saveRemoteProjects(projects).catch((error) => console.warn('Supabase save failed:', error.message));
     }
   }, [projects, remoteReady, shareTarget?.shareId]);
@@ -557,8 +561,18 @@ export default function App() {
       });
       project.docs = { ...project.docs, [activePage]: doc };
       next[activeProjectId] = project;
+      latestProjectsRef.current = next;
+      stickerDragDirtyRef.current = true;
       return next;
     });
+  };
+
+  const finishStickerDrag = () => {
+    isStickerDraggingRef.current = false;
+    if (!stickerDragDirtyRef.current || shareTarget?.shareId || !remoteReady) return;
+    const projectsToSave = latestProjectsRef.current;
+    stickerDragDirtyRef.current = false;
+    saveRemoteProjects(projectsToSave).catch((error) => console.warn('Supabase save failed:', error.message));
   };
 
   const stickerDragProps = (blockIndex, stickerIndex, interactive, sticker) => {
@@ -578,6 +592,7 @@ export default function App() {
           x: point.x - current.x,
           y: point.y - current.y
         };
+        isStickerDraggingRef.current = true;
         event.currentTarget.setPointerCapture(event.pointerId);
       },
       onPointerMove: (event) => {
@@ -588,6 +603,13 @@ export default function App() {
         if (event.currentTarget.hasPointerCapture(event.pointerId)) {
           event.currentTarget.releasePointerCapture(event.pointerId);
         }
+        finishStickerDrag();
+      },
+      onPointerCancel: (event) => {
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+          event.currentTarget.releasePointerCapture(event.pointerId);
+        }
+        finishStickerDrag();
       }
     };
   };
