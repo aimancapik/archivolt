@@ -257,10 +257,9 @@ select:focus-visible,
 }
 
 .section-map-rail {
-  position: fixed;
-  left: clamp(184px, 16vw, 244px);
-  top: 50%;
-  transform: translateY(-50%);
+  position: absolute;
+  left: clamp(12px, 1.6vw, 26px);
+  top: clamp(150px, 38vh, 340px);
   z-index: 35;
   display: flex;
   flex-direction: column;
@@ -312,10 +311,10 @@ select:focus-visible,
 
 .section-map-preview {
   position: absolute;
-  left: 46px;
+  left: 42px;
   top: -14px;
   display: none;
-  width: min(402px, calc(100vw - 86px));
+  width: min(340px, calc(100vw - 120px));
   padding: 13px 13px 12px;
   background: #2b2b2b;
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -368,11 +367,11 @@ select:focus-visible,
 
 @media (min-width: 900px) {
   .section-map-rail {
-    left: clamp(204px, 17vw, 276px);
+    left: clamp(16px, 2vw, 32px);
   }
 
   .section-map-preview {
-    left: 50px;
+    left: 46px;
   }
 }
 
@@ -443,8 +442,8 @@ select:focus-visible,
   }
 
   .section-map-rail {
-    left: 28px;
-    top: 50%;
+    left: 16px;
+    top: 150px;
   }
 
   .section-map-rail__mark:hover::after,
@@ -454,7 +453,7 @@ select:focus-visible,
 
   .section-map-preview {
     left: 34px;
-    width: min(320px, calc(100vw - 54px));
+    width: min(280px, calc(100vw - 74px));
   }
 
   .archive-footer {

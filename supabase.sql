@@ -33,12 +33,16 @@ alter table archive_shares enable row level security;
 drop policy if exists "public share read" on archive_shares;
 create policy "public share read"
 on archive_shares for select
+to anon, authenticated
 using (true);
 
 drop policy if exists "public share create" on archive_shares;
 create policy "public share create"
 on archive_shares for insert
+to anon, authenticated
 with check (true);
+
+grant select, insert on archive_shares to anon, authenticated;
 
 insert into storage.buckets (id, name, public)
 values ('documentation-images', 'documentation-images', true)
