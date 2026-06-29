@@ -5,13 +5,29 @@ import { InteractiveInputDemo } from './components/InteractiveInputDemo';
 import { LiveRunner } from './components/LiveRunner';
 import { SidebarLayout } from './layouts/SidebarLayout';
 import { isSupabaseConfigured } from './lib/supabase';
-import { loadRemoteProjects, saveRemoteProjects, uploadImage } from './lib/archiveStore';
+import { createDocumentShare, loadDocumentShare, loadRemoteProjects, saveRemoteProjects, uploadImage } from './lib/archiveStore';
 import { checklistItemsFromText } from './utils/checklist';
 import { headingDomId } from './utils/documentStructure';
 import { orderedPageKeys } from './utils/pageOrder';
-import { normalizeSticker, stickerPlacementStyle } from './utils/stickerPlacement';
+import { normalizeSticker, pointerToStickerPoint, stickerPlacementStyle } from './utils/stickerPlacement';
 
 const STORAGE_KEY = 'archivolt.projects';
+const SITE_PASSCODE = '246260';
+const SITE_ACCESS_KEY = 'archivolt.siteAccess';
+const BACKGROUND_OPTIONS = ['grid', 'dots', 'horizontal-lines', 'vertical-lines', 'checkerboard', 'wave', 'ripple', 'warp'];
+const FALLBACK_BACKGROUND = 'dots';
+
+const randomBackgroundPattern = () => BACKGROUND_OPTIONS[Math.floor(Math.random() * BACKGROUND_OPTIONS.length)];
+const getShareTarget = () => {
+  const params = new URLSearchParams(window.location.search);
+  const share = params.get('share');
+  if (!share) return null;
+  if (share !== '1') return { shareId: share };
+  return {
+    projectId: params.get('project'),
+    pageKey: params.get('page')
+  };
+};
 
 // --- PALETTE (inline styles only — no dynamic Tailwind) ---
 const PALETTE = [
@@ -19,13 +35,13 @@ const PALETTE = [
     bgColor: '#e4decd', textColor: '#1a1b1c', accentColor: '#4a5240',
     borderColor: 'rgba(26,27,28,0.2)',
     gradient: 'linear-gradient(180deg, #ebe6d6 0%, #e4decd 50%, #d9d3c1 100%)',
-    pattern: 'dither',
+    pattern: 'grid',
   },
   {
     bgColor: '#b8bdb0', textColor: '#1a1b1c', accentColor: '#3d4a35',
     borderColor: 'rgba(26,27,28,0.2)',
     gradient: 'linear-gradient(180deg, #c3c8bb 0%, #b8bdb0 50%, #aaafa2 100%)',
-    pattern: 'lines',
+    pattern: 'horizontal-lines',
   },
   {
     bgColor: '#1a1b1c', textColor: '#e4decd', accentColor: '#c4a35a',
@@ -37,13 +53,13 @@ const PALETTE = [
     bgColor: '#6b5e4f', textColor: '#e4decd', accentColor: '#c9a96e',
     borderColor: 'rgba(228,222,205,0.15)',
     gradient: 'linear-gradient(180deg, #7a6d5e 0%, #6b5e4f 50%, #5a4e3f 100%)',
-    pattern: 'cross',
+    pattern: 'checkerboard',
   },
   {
     bgColor: '#78838b', textColor: '#e4decd', accentColor: '#a8b5be',
     borderColor: 'rgba(228,222,205,0.15)',
     gradient: 'linear-gradient(180deg, #869099 0%, #78838b 50%, #6a757d 100%)',
-    pattern: 'dither',
+    pattern: 'dots',
   },
 ];
 
@@ -175,16 +191,26 @@ const loadProjects = () => {
 
 // --- MAIN APPLICATION ---
 export default function App() {
+  const shareTarget = getShareTarget();
   const [projects, setProjects] = useState(loadProjects);
+  const [sharedProjects, setSharedProjects] = useState(null);
+  const [shareError, setShareError] = useState('');
+  const [siteCode, setSiteCode] = useState('');
+  const [siteCodeError, setSiteCodeError] = useState('');
+  const [siteUnlocked, setSiteUnlocked] = useState(() => (
+    Boolean(shareTarget?.shareId) || localStorage.getItem(SITE_ACCESS_KEY) === '1'
+  ));
   const [remoteReady, setRemoteReady] = useState(!isSupabaseConfigured);
   const [activeProjectId, setActiveProjectId] = useState('nexus-ui');
   const [activePage, setActivePage] = useState('getting_started');
   const [isAddingData, setIsAddingData] = useState(false);
   const [isEditingData, setIsEditingData] = useState(false);
   const initialProjectsRef = React.useRef(projects);
+  const stickerDragOffsetRef = React.useRef({ x: 0, y: 0 });
 
-  const activeProject = projects[activeProjectId];
-  const hasProjects = Object.keys(projects).length > 0;
+  const visibleProjects = sharedProjects || projects;
+  const activeProject = visibleProjects[activeProjectId];
+  const hasProjects = Object.keys(visibleProjects).length > 0;
 
   const pageKeys = activeProject ? orderedPageKeys(activeProject.docs) : [];
   const currentIndex = pageKeys.indexOf(activePage);
@@ -192,17 +218,19 @@ export default function App() {
   const nextPageKey = currentIndex < pageKeys.length - 1 ? pageKeys[currentIndex + 1] : null;
   const currentPageData = activeProject?.docs[activePage] || (activeProject ? Object.values(activeProject.docs)[0] : null);
   const activeTheme = PALETTE[currentIndex >= 0 ? currentIndex % PALETTE.length : 0];
+  const backgroundPattern = currentPageData?.backgroundPattern || activeProject?.backgroundPattern || FALLBACK_BACKGROUND;
   const feedback = useFeedback(activeTheme);
 
   useEffect(() => {
+    if (shareTarget?.shareId) return;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
     if (remoteReady) {
       saveRemoteProjects(projects).catch((error) => console.warn('Supabase save failed:', error.message));
     }
-  }, [projects, remoteReady]);
+  }, [projects, remoteReady, shareTarget?.shareId]);
 
   useEffect(() => {
-    if (!isSupabaseConfigured) return;
+    if (!isSupabaseConfigured || shareTarget?.shareId) return;
 
     loadRemoteProjects()
       .then((remoteProjects) => {
@@ -211,7 +239,41 @@ export default function App() {
       })
       .catch((error) => console.warn('Supabase load failed:', error.message))
       .finally(() => setRemoteReady(true));
-  }, []);
+  }, [shareTarget?.shareId]);
+
+  useEffect(() => {
+    if (!shareTarget?.shareId) return;
+
+    loadDocumentShare(shareTarget.shareId)
+      .then((share) => {
+        if (!share?.project || !share?.doc || !share?.pageKey) {
+          setShareError('Share not found');
+          return;
+        }
+        setSharedProjects({
+          [share.project.id]: {
+            ...share.project,
+            docs: {
+              [share.pageKey]: share.doc
+            }
+          }
+        });
+        setActiveProjectId(share.project.id);
+        setActivePage(share.pageKey);
+        setIsAddingData(false);
+        setIsEditingData(false);
+      })
+      .catch(() => setShareError('Share not found'));
+  }, [shareTarget?.shareId]);
+
+  useEffect(() => {
+    if (!shareTarget?.projectId || !shareTarget?.pageKey) return;
+    if (!visibleProjects[shareTarget.projectId]?.docs?.[shareTarget.pageKey]) return;
+    setActiveProjectId(shareTarget.projectId);
+    setActivePage(shareTarget.pageKey);
+    setIsAddingData(false);
+    setIsEditingData(false);
+  }, [visibleProjects, shareTarget?.pageKey, shareTarget?.projectId]);
 
   const buildContentBlocks = async (formData, folder) => Promise.all(formData.blocks.map(async (b) => {
     const block = {
@@ -261,9 +323,11 @@ export default function App() {
       setProjects((prev) => {
         const next = { ...prev };
         const project = { ...next[activeProjectId] };
+        const existingDoc = project.docs[newPageId];
         const docs = Object.fromEntries(Object.entries(project.docs).filter(([id]) => id !== newPageId));
         project.docs = {
           [newPageId]: {
+            backgroundPattern: existingDoc?.backgroundPattern || randomBackgroundPattern(),
             title: formData.pageTitle.toUpperCase(),
             subtitle: formData.version.toUpperCase(),
             content,
@@ -289,6 +353,7 @@ export default function App() {
           version: formData.version,
           docs: {
             index: {
+              backgroundPattern: randomBackgroundPattern(),
               title: formData.pageTitle.toUpperCase(), 
               subtitle: "CODE_000 // INIT",
               content,
@@ -405,6 +470,53 @@ export default function App() {
     feedback.notify(willPin ? 'Record pinned' : 'Record unpinned', 'success');
   };
 
+  const setBackgroundPattern = (pattern) => {
+    setProjects((prev) => {
+      if (!prev[activeProjectId]?.docs?.[activePage]) return prev;
+      return {
+        ...prev,
+        [activeProjectId]: {
+          ...prev[activeProjectId],
+          docs: {
+            ...prev[activeProjectId].docs,
+            [activePage]: {
+              ...prev[activeProjectId].docs[activePage],
+              backgroundPattern: pattern
+            }
+          }
+        }
+      };
+    });
+  };
+
+  const createShareLink = async () => {
+    if (!activeProject || !currentPageData) return '';
+
+    const shareId = await createDocumentShare({
+      project: {
+        id: activeProject.id,
+        name: activeProject.name,
+        version: activeProject.version
+      },
+      pageKey: activePage,
+      doc: currentPageData
+    });
+    const url = new URL(window.location.href);
+    url.search = new URLSearchParams({ share: shareId }).toString();
+    return url.toString();
+  };
+
+  const unlockSite = (event) => {
+    event.preventDefault();
+    if (siteCode.trim() !== SITE_PASSCODE) {
+      setSiteCodeError('Invalid access code');
+      return;
+    }
+    localStorage.setItem(SITE_ACCESS_KEY, '1');
+    setSiteCodeError('');
+    setSiteUnlocked(true);
+  };
+
   const toggleChecklistItem = (blockIndex, itemIndex) => {
     if (!currentPageData?.content?.[blockIndex] || currentPageData.content[blockIndex].type !== 'checklist') return;
     setProjects((prev) => {
@@ -419,6 +531,65 @@ export default function App() {
       next[activeProjectId] = project;
       return next;
     });
+  };
+
+  const moveSticker = (blockIndex, stickerIndex, clientX, clientY, target) => {
+    const stage = target.closest('.archive-inner');
+    if (!stage) return;
+    const point = pointerToStickerPoint(clientX, clientY, stage.getBoundingClientRect());
+    const nextPoint = {
+      x: Math.min(100, Math.max(0, point.x - stickerDragOffsetRef.current.x)),
+      y: Math.min(100, Math.max(0, point.y - stickerDragOffsetRef.current.y))
+    };
+
+    setProjects((prev) => {
+      if (!prev[activeProjectId]?.docs?.[activePage]?.content?.[blockIndex]) return prev;
+      const next = { ...prev };
+      const project = { ...next[activeProjectId] };
+      const doc = { ...project.docs[activePage] };
+      doc.content = doc.content.map((block, index) => {
+        if (index !== blockIndex) return block;
+        if (block.type === 'sticker') return { ...block, ...nextPoint };
+        return {
+          ...block,
+          items: (block.items || []).map((sticker, index) => index === stickerIndex ? { ...sticker, ...nextPoint } : sticker)
+        };
+      });
+      project.docs = { ...project.docs, [activePage]: doc };
+      next[activeProjectId] = project;
+      return next;
+    });
+  };
+
+  const stickerDragProps = (blockIndex, stickerIndex, interactive, sticker) => {
+    if (!interactive) return {};
+
+    return {
+      role: 'button',
+      tabIndex: 0,
+      title: 'Drag sticker',
+      onPointerDown: (event) => {
+        event.preventDefault();
+        const stage = event.currentTarget.closest('.archive-inner');
+        if (!stage) return;
+        const point = pointerToStickerPoint(event.clientX, event.clientY, stage.getBoundingClientRect());
+        const current = normalizeSticker(sticker);
+        stickerDragOffsetRef.current = {
+          x: point.x - current.x,
+          y: point.y - current.y
+        };
+        event.currentTarget.setPointerCapture(event.pointerId);
+      },
+      onPointerMove: (event) => {
+        if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
+        moveSticker(blockIndex, stickerIndex, event.clientX, event.clientY, event.currentTarget);
+      },
+      onPointerUp: (event) => {
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+          event.currentTarget.releasePointerCapture(event.pointerId);
+        }
+      }
+    };
   };
 
   const renderContent = (block, index, { interactive = false } = {}) => {
@@ -445,8 +616,9 @@ export default function App() {
             key={index}
             src={block.url}
             alt=""
-            className="pointer-events-none absolute z-40"
+            className={`absolute z-40 touch-none select-none ${interactive ? 'cursor-grab active:cursor-grabbing' : 'pointer-events-none'}`}
             style={stickerPlacementStyle(block)}
+            {...stickerDragProps(index, 0, interactive, block)}
           />
         );
       case 'stickers':
@@ -455,8 +627,9 @@ export default function App() {
             key={`${index}-${sticker.id || stickerIndex}`}
             src={sticker.url}
             alt=""
-            className="pointer-events-none absolute z-40"
+            className={`absolute z-40 touch-none select-none ${interactive ? 'cursor-grab active:cursor-grabbing' : 'pointer-events-none'}`}
             style={stickerPlacementStyle(sticker)}
+            {...stickerDragProps(index, stickerIndex, interactive, sticker)}
           />
         ));
       case 'list':
@@ -501,9 +674,61 @@ export default function App() {
 
   return (
     <div className="h-screen w-screen relative vignette grain" style={{ background: '#0a0a0b', overflow: 'hidden' }}>
-      {hasProjects && activeProject ? (
+      {shareTarget?.shareId && !sharedProjects && !shareError ? (
+        <div className="h-full w-full flex items-center justify-center px-6" style={{ color: '#e4decd', zIndex: 10 }}>
+          <div className="max-w-md w-full border p-8 text-center" style={{ borderColor: 'rgba(228,222,205,0.2)', background: '#0d0d0e' }}>
+            <h1 className="font-serif font-bold text-4xl mb-3">LOADING SHARE</h1>
+            <p className="font-mono-tech text-xs uppercase" style={{ opacity: 0.65 }}>
+              Fetching shared documentation.
+            </p>
+          </div>
+        </div>
+      ) : shareError ? (
+        <div className="h-full w-full flex items-center justify-center px-6" style={{ color: '#e4decd', zIndex: 10 }}>
+          <div className="max-w-md w-full border p-8 text-center" style={{ borderColor: 'rgba(228,222,205,0.2)', background: '#0d0d0e' }}>
+            <h1 className="font-serif font-bold text-4xl mb-3">SHARE NOT FOUND</h1>
+            <p className="font-mono-tech text-xs uppercase" style={{ opacity: 0.65 }}>
+              This shared documentation link is invalid or unavailable.
+            </p>
+          </div>
+        </div>
+      ) : !shareTarget?.shareId && !siteUnlocked ? (
+        <div className="h-full w-full flex items-center justify-center px-6" style={{ color: '#e4decd', zIndex: 10 }}>
+          <form onSubmit={unlockSite} className="max-w-md w-full border p-8 text-center" style={{ borderColor: 'rgba(228,222,205,0.2)', background: '#0d0d0e' }}>
+            <h1 className="font-serif font-bold text-4xl mb-3">ACCESS CODE</h1>
+            <p className="font-mono-tech text-xs uppercase mb-6" style={{ opacity: 0.65 }}>
+              Enter the 6 digit code to access Archivolt.
+            </p>
+            <input
+              value={siteCode}
+              onChange={(event) => {
+                setSiteCode(event.target.value.replace(/\D/g, '').slice(0, 6));
+                setSiteCodeError('');
+              }}
+              inputMode="numeric"
+              pattern="[0-9]{6}"
+              autoFocus
+              className="w-full p-4 bg-transparent text-center font-mono-tech text-2xl tracking-[0.45em] focus:outline-none"
+              style={{ border: '1px solid rgba(228,222,205,0.45)', color: '#e4decd' }}
+              aria-label="Site access code"
+            />
+            {siteCodeError && (
+              <p className="font-mono-tech text-[10px] uppercase mt-3" style={{ color: '#ff5f57' }}>
+                {siteCodeError}
+              </p>
+            )}
+            <button
+              type="submit"
+              className="mt-6 w-full py-3 border font-display font-bold uppercase cursor-pointer"
+              style={{ borderColor: '#e4decd', color: '#e4decd', background: 'transparent', letterSpacing: '0.12em' }}
+            >
+              Unlock
+            </button>
+          </form>
+        </div>
+      ) : hasProjects && activeProject ? (
         <SidebarLayout
-          projects={projects}
+          projects={visibleProjects}
           activeProjectId={activeProjectId}
           setActiveProjectId={setActiveProjectId}
           activePage={activePage}
@@ -519,6 +744,8 @@ export default function App() {
           activeTheme={activeTheme}
           PALETTE={PALETTE}
           currentPageData={currentPageData}
+          backgroundPattern={backgroundPattern}
+          setBackgroundPattern={setBackgroundPattern}
           handleSaveNewData={handleSaveNewData}
           handleUpdateDocument={handleUpdateDocument}
           handleDeleteDocument={handleDeleteDocument}
@@ -528,6 +755,8 @@ export default function App() {
           notify={feedback.notify}
           orderedPageKeys={orderedPageKeys}
           renderContent={renderContent}
+          isSharedView={Boolean(shareTarget)}
+          createShareLink={createShareLink}
         />
       ) : (
         <div className="h-full w-full flex items-center justify-center px-6" style={{ color: '#e4decd', zIndex: 10 }}>

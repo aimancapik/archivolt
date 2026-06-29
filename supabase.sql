@@ -22,6 +22,24 @@ on archive_state for update
 using (true)
 with check (true);
 
+create table if not exists archive_shares (
+  id text primary key,
+  data jsonb not null,
+  created_at timestamptz not null default now()
+);
+
+alter table archive_shares enable row level security;
+
+drop policy if exists "public share read" on archive_shares;
+create policy "public share read"
+on archive_shares for select
+using (true);
+
+drop policy if exists "public share create" on archive_shares;
+create policy "public share create"
+on archive_shares for insert
+with check (true);
+
 insert into storage.buckets (id, name, public)
 values ('documentation-images', 'documentation-images', true)
 on conflict (id) do nothing;

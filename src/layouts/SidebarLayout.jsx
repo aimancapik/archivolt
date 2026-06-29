@@ -1,9 +1,28 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Plus, ArrowLeft, ArrowRight, ChevronDown, Edit3, Trash2, Settings, Pin, Search } from 'lucide-react';
+import { Plus, ArrowLeft, ArrowRight, ChevronDown, Edit3, Trash2, Settings, Pin, Search, Share2 } from 'lucide-react';
+import { BGPattern } from '../components/ui/bg-pattern';
+import { DitheringShader } from '../components/ui/dithering-shader';
 import { CommandPalette } from '../components/CommandPalette';
 import { DataEntryForm } from '../components/DataEntryForm';
 import { documentHeadings } from '../utils/documentStructure';
 import { STICKER_STAGE_HEIGHT } from '../utils/stickerPlacement';
+
+const BG_PATTERN_VARIANTS = ['grid', 'dots', 'horizontal-lines', 'vertical-lines', 'checkerboard'];
+const BG_SHADER_VARIANTS = ['wave', 'ripple', 'warp'];
+const BG_OPTIONS = [...BG_PATTERN_VARIANTS, ...BG_SHADER_VARIANTS];
+
+const BACKGROUND_LABELS = {
+  grid: 'Grid',
+  dots: 'Dots',
+  'horizontal-lines': 'Rows',
+  'vertical-lines': 'Columns',
+  checkerboard: 'Checks',
+  wave: 'Wave',
+  ripple: 'Ripple',
+  warp: 'Warp',
+};
+
+const BACKGROUND_OPTIONS = BG_OPTIONS.map((value) => ({ value, label: BACKGROUND_LABELS[value] }));
 
 export const SidebarLayout = ({
   projects,
@@ -22,6 +41,8 @@ export const SidebarLayout = ({
   activeTheme,
   PALETTE,
   currentPageData,
+  backgroundPattern,
+  setBackgroundPattern,
   confirmAction,
   handleSaveNewData,
   handleUpdateDocument,
@@ -30,7 +51,9 @@ export const SidebarLayout = ({
   handleTogglePinDocument,
   notify,
   orderedPageKeys,
-  renderContent
+  renderContent,
+  isSharedView = false,
+  createShareLink
 }) => {
   const [commandOpen, setCommandOpen] = useState(false);
   const [activeMapIndex, setActiveMapIndex] = useState(0);
@@ -39,6 +62,8 @@ export const SidebarLayout = ({
   const [hasDirtyEdit, setHasDirtyEdit] = useState(false);
   const contentRef = useRef(null);
   const scrollToTop = () => contentRef.current?.scrollTo(0, 0);
+  const selectedBackgroundPattern = BG_OPTIONS.includes(backgroundPattern) ? backgroundPattern : 'dots';
+  const activeBackgroundPattern = selectedBackgroundPattern;
 
   const confirmDiscardEdit = async () => {
     if (!isEditingData || !hasDirtyEdit) return true;
@@ -56,12 +81,29 @@ export const SidebarLayout = ({
     setHasDirtyEdit(false);
   };
 
+  const copyShareLink = async () => {
+    try {
+      const shareUrl = await createShareLink?.();
+      if (!shareUrl) {
+        notify('Could not create share link', 'danger');
+        return;
+      }
+
+      navigator.clipboard.writeText(shareUrl)
+        .then(() => notify('Share link copied', 'success'))
+        .catch(() => notify('Could not copy share link', 'danger'));
+    } catch {
+      notify('Could not create share link', 'danger');
+    }
+  };
+
   const goToProjectPage = async (projectId, key, headingId = null) => {
     if (projectId === activeProjectId && key === activePage && !headingId) return;
     if (!await confirmDiscardEdit()) return;
     if (projectId !== activeProjectId) setActiveProjectId(projectId);
     setActivePage(key);
     leaveEditor();
+    setShowProjectSettings(false);
     scrollToTop();
     if (headingId) setTimeout(() => document.getElementById(headingId)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
   };
@@ -101,23 +143,6 @@ export const SidebarLayout = ({
       type: block.type
     };
   }), [activePage, currentPageData?.content, currentPageData?.title]);
-
-  const docText = (doc) => [doc?.title, doc?.subtitle, ...(doc?.content || []).map((block) => block.value || block.caption || block.defaultCode || (block.items || []).join?.(' ') || '')].join(' ').toLowerCase();
-
-  const relatedRecords = useMemo(() => {
-    if (!currentPageData) return [];
-    const words = new Set(docText(currentPageData).match(/[a-z0-9_]{4,}/g)?.slice(0, 24) || []);
-    if (!words.size) return [];
-
-    return Object.entries(projects).flatMap(([projectId, project]) => (
-      orderedPageKeys(project.docs).map((pageKey) => {
-        const doc = project.docs[pageKey];
-        if (projectId === activeProjectId && pageKey === activePage) return null;
-        const score = (docText(doc).match(/[a-z0-9_]{4,}/g) || []).filter((word) => words.has(word)).length;
-        return score ? { projectId, pageKey, doc, project, score } : null;
-      })
-    )).filter(Boolean).sort((a, b) => b.score - a.score).slice(0, 3);
-  }, [activePage, activeProjectId, currentPageData, orderedPageKeys, projects]);
 
   const commands = (() => {
     const items = [
@@ -210,7 +235,7 @@ export const SidebarLayout = ({
         }}
       >
         {/* LEFT SIDE: Vertical Staggered Tabs */}
-        <div className="archive-tab-rail flex flex-col z-10 w-24 md:w-32 shrink-0 -mr-[2px] overflow-y-auto scrollbar-none" style={{ maxHeight: '100%' }}>
+        {!isSharedView && <div className="archive-tab-rail flex flex-col z-10 w-24 md:w-32 shrink-0 -mr-[2px] overflow-y-auto scrollbar-none" style={{ maxHeight: '100%' }}>
           {pageKeys.map((key, index) => {
             const isActive = activePage === key;
             const doc = activeProject.docs[key];
@@ -250,19 +275,18 @@ export const SidebarLayout = ({
               </button>
             );
           })}
-        </div>
+        </div>}
 
         {/* RIGHT SIDE: Active Folder Content */}
         <div
           ref={contentRef}
-          className="archive-content-panel flex-1 border-2 relative overflow-y-auto transition-colors duration-500 rounded-tr-lg rounded-br-lg"
+          className="archive-content-panel isolate flex-1 border-2 relative overflow-x-hidden overflow-y-auto transition-colors duration-500 rounded-tr-lg rounded-br-lg"
           style={{
             backgroundColor: activeTheme.bgColor,
             color: activeTheme.textColor,
             borderColor: activeTheme.borderColor || 'black',
           }}
         >
-          
           {/* Top Bar / Project Switcher */}
           <div 
             className="archive-topbar sticky top-0 z-30 border-b-2 px-6 py-3 flex items-center justify-between bg-inherit backdrop-blur-md"
@@ -270,6 +294,11 @@ export const SidebarLayout = ({
           >
             <div className="flex items-center gap-4">
               <div className="relative inline-flex items-center">
+                {isSharedView ? (
+                  <h2 className="font-serif font-bold text-xl md:text-3xl tracking-tighter uppercase" style={{ color: activeTheme.textColor }}>
+                    {activeProject.name}
+                  </h2>
+                ) : (
                 <select 
                   value={activeProjectId}
                   aria-label="Active project"
@@ -288,12 +317,13 @@ export const SidebarLayout = ({
                     <option key={p.id} value={p.id} style={{ color: '#1a1b1c', background: '#e4decd' }}>{p.name}</option>
                   ))}
                 </select>
-                <ChevronDown className="pointer-events-none absolute right-0 h-4 w-4 opacity-60" />
+                )}
+                {!isSharedView && <ChevronDown className="pointer-events-none absolute right-0 h-4 w-4 opacity-60" />}
               </div>
               <span className="font-mono-tech text-xs opacity-50 hidden md:block">_{activeProject.version}</span>
             </div>
 
-            <div className="flex items-center gap-4">
+            {!isSharedView && <div className="flex items-center gap-4">
               <button
                 onClick={() => setCommandOpen(true)}
                 className="p-2 border-2 transition-colors cursor-pointer"
@@ -317,6 +347,18 @@ export const SidebarLayout = ({
               </button>
               {!isAddingData && (
                 <>
+                  <button
+                    onClick={copyShareLink}
+                    className="p-2 border-2 transition-colors cursor-pointer"
+                    style={{
+                      borderColor: activeTheme.textColor,
+                      color: activeTheme.textColor,
+                    }}
+                    title="Copy Share Link"
+                    aria-label="Copy share link"
+                  >
+                    <Share2 className="w-5 h-5" />
+                  </button>
                   <button
                     onClick={handleTogglePinDocument}
                     className="p-2 border-2 transition-colors cursor-pointer"
@@ -357,11 +399,32 @@ export const SidebarLayout = ({
                   </button>
                 </>
               )}
-            </div>
+            </div>}
           </div>
 
-          {showProjectSettings && (
-            <div className="sticky top-[66px] z-20 px-6 py-3 flex justify-end bg-inherit border-b" style={{ borderColor: activeTheme.borderColor }}>
+          {!isSharedView && showProjectSettings && (
+            <div className="sticky top-[66px] z-20 px-6 py-3 flex flex-wrap items-center justify-between gap-3 bg-inherit border-b" style={{ borderColor: activeTheme.borderColor }}>
+              <div className="flex items-center gap-3">
+                <label htmlFor="background-pattern" className="font-mono-tech text-[10px] uppercase opacity-60">
+                  BG
+                </label>
+                <div className="relative inline-flex items-center">
+                  <select
+                    id="background-pattern"
+                    value={selectedBackgroundPattern}
+                    onChange={(event) => setBackgroundPattern(event.target.value)}
+                    className="appearance-none border-2 bg-transparent py-2 pl-3 pr-8 font-mono-tech text-[10px] uppercase cursor-pointer"
+                    style={{ borderColor: activeTheme.textColor, color: activeTheme.textColor }}
+                  >
+                    {BACKGROUND_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value} style={{ color: '#1a1b1c', background: '#e4decd' }}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-2 h-3.5 w-3.5 opacity-60" />
+                </div>
+              </div>
               <button
                 onClick={handleDeleteProject}
                 className="px-3 py-2 border-2 font-mono-tech text-[10px] uppercase transition-colors cursor-pointer flex items-center gap-2"
@@ -374,8 +437,26 @@ export const SidebarLayout = ({
 
           {/* Inner Content Area */}
           <div className="archive-inner p-6 md:p-12 lg:p-20 max-w-4xl mx-auto relative min-h-full">
+            {BG_SHADER_VARIANTS.includes(activeBackgroundPattern) ? (
+              <DitheringShader
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-y-0 left-1/2 z-0 h-full w-[100vw] -translate-x-1/2"
+                color={activeTheme.textColor}
+                shape={activeBackgroundPattern}
+              />
+            ) : (
+              <BGPattern
+                aria-hidden="true"
+                className="left-1/2 w-[100vw] -translate-x-1/2"
+                variant={activeBackgroundPattern}
+                mask="fade-edges"
+                size={activeBackgroundPattern === 'dots' ? 18 : 30}
+                fill={activeTheme.textColor}
+                style={{ opacity: 0.13 }}
+              />
+            )}
             
-            {isAddingData || isEditingData ? (
+            {!isSharedView && (isAddingData || isEditingData) ? (
               // --- RENDER THE NEW DATA ENTRY FORM ---
               <DataEntryForm 
                 key={`${isEditingData ? 'edit' : 'create'}-${activeProjectId}-${activePage}`}
@@ -455,33 +536,13 @@ export const SidebarLayout = ({
                 <div className="mt-12 md:mt-0 relative z-10 animate-fade-in" style={{ minHeight: STICKER_STAGE_HEIGHT }}>
                   {currentPageData?.content.map((block, index) => (
                     <div id={`record-map-${activePage}-${index}`} key={index} className="scroll-mt-28">
-                      {renderContent(block, index, { interactive: true })}
+                      {renderContent(block, index, { interactive: !isSharedView })}
                     </div>
                   ))}
                 </div>
 
-                {!!relatedRecords.length && (
-                  <div className="mt-16 border-t pt-6" style={{ borderColor: activeTheme.borderColor }}>
-                    <div className="mb-3 font-mono-tech text-[10px] uppercase opacity-60">Related records</div>
-                    <div className="grid gap-3 md:grid-cols-3">
-                      {relatedRecords.map((item) => (
-                        <button
-                          key={`${item.projectId}-${item.pageKey}`}
-                          type="button"
-                          onClick={() => goToProjectPage(item.projectId, item.pageKey)}
-                          className="border p-3 text-left transition-opacity cursor-pointer hover:opacity-75"
-                          style={{ borderColor: activeTheme.borderColor, color: activeTheme.textColor, background: 'transparent' }}
-                        >
-                          <div className="font-serif font-bold uppercase leading-tight">{item.doc.title}</div>
-                          <div className="mt-2 font-mono-tech text-[9px] uppercase opacity-55">{item.project.name}</div>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
                 {/* Brutalist Pagination Footer */}
-                <div 
+                {!isSharedView && <div 
                   className="archive-footer mt-24 pt-8 border-t-4 grid grid-cols-2 gap-4 pb-12"
                   style={{ borderColor: activeTheme.textColor }}
                 >
@@ -505,7 +566,7 @@ export const SidebarLayout = ({
                       <span className="font-serif font-bold">{projects[activeProjectId].docs[nextPageKey].title}</span>
                     </button>
                   ) : <div />}
-                </div>
+                </div>}
               </>
             )}
 
@@ -513,7 +574,7 @@ export const SidebarLayout = ({
         </div>
 
       </div>
-      <CommandPalette commands={commands} onClose={() => setCommandOpen(false)} open={commandOpen} theme={activeTheme} />
+      {!isSharedView && <CommandPalette commands={commands} onClose={() => setCommandOpen(false)} open={commandOpen} theme={activeTheme} />}
     </div>
   );
 };

@@ -31,7 +31,7 @@ export const stickerPlacementStyle = (sticker) => {
 
   return {
     left: `${x}%`,
-    top: `${round((y / 100) * STICKER_STAGE_HEIGHT)}px`,
+    top: `${y}%`,
     width: `${width}%`,
     transform: `translate(-50%, -50%) rotate(${rotation}deg)`
   };
@@ -39,10 +39,9 @@ export const stickerPlacementStyle = (sticker) => {
 
 export const pointerToStickerPoint = (clientX, clientY, rect) => {
   if (!rect.width || !rect.height) return { x: 0, y: 0 };
-  const height = Math.min(rect.height, STICKER_STAGE_HEIGHT);
 
   return {
     x: round(clamp(((clientX - rect.left) / rect.width) * 100)),
-    y: round(clamp(((clientY - rect.top) / height) * 100))
+    y: round(clamp(((clientY - rect.top) / rect.height) * 100))
   };
 };
