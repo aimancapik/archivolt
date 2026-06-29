@@ -516,7 +516,6 @@ export const SidebarLayout = ({
                             document.getElementById(mark.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
                           }}
                           className={`section-map-rail__mark ${mark.type === 'heading' ? 'is-heading' : ''} ${markIndex === activeMapIndex ? 'is-current' : ''}`}
-                          title={mark.title}
                           aria-label={`Jump to ${mark.title}`}
                         />
                         <div className="section-map-preview" role="tooltip">
