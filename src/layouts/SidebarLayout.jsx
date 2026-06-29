@@ -253,7 +253,9 @@ export const SidebarLayout = ({
           {pageKeys.map((key, index) => {
             const isActive = activePage === key;
             const doc = activeProject.docs[key];
-            const theme = PALETTE[index % PALETTE.length];
+            const tabTheme = isActive
+              ? activeTheme
+              : PALETTE.find((item) => item.bgColor === doc.backgroundColor) || PALETTE[index % PALETTE.length];
             
             return (
               <button
@@ -268,9 +270,9 @@ export const SidebarLayout = ({
                   rounded-tl-lg rounded-bl-lg
                 `}
                 style={{
-                  backgroundColor: theme.bgColor,
-                  color: theme.textColor,
-                  borderColor: theme.borderColor || 'black',
+                  backgroundColor: tabTheme.bgColor,
+                  color: tabTheme.textColor,
+                  borderColor: tabTheme.borderColor || 'black',
                   minHeight: '168px',
                 }}
               >
