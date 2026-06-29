@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Plus, ArrowLeft, ArrowRight, ChevronDown, Edit3, Trash2, Settings, Pin, Search, Share2 } from 'lucide-react';
 import { BGPattern } from '../components/ui/bg-pattern';
+import { BeamsBackground } from '../components/ui/beams-background';
 import { DitheringShader } from '../components/ui/dithering-shader';
 import { CommandPalette } from '../components/CommandPalette';
 import { DataEntryForm } from '../components/DataEntryForm';
@@ -9,7 +10,8 @@ import { STICKER_STAGE_HEIGHT } from '../utils/stickerPlacement';
 
 const BG_PATTERN_VARIANTS = ['grid', 'dots', 'horizontal-lines', 'vertical-lines', 'checkerboard'];
 const BG_SHADER_VARIANTS = ['wave', 'ripple', 'warp'];
-const BG_OPTIONS = [...BG_PATTERN_VARIANTS, ...BG_SHADER_VARIANTS];
+const BG_CSS_VARIANTS = ['beams'];
+const BG_OPTIONS = [...BG_PATTERN_VARIANTS, ...BG_SHADER_VARIANTS, ...BG_CSS_VARIANTS];
 
 const BACKGROUND_LABELS = {
   grid: 'Grid',
@@ -20,9 +22,19 @@ const BACKGROUND_LABELS = {
   wave: 'Wave',
   ripple: 'Ripple',
   warp: 'Warp',
+  beams: 'Beams',
 };
 
 const BACKGROUND_OPTIONS = BG_OPTIONS.map((value) => ({ value, label: BACKGROUND_LABELS[value] }));
+
+const blockPreviewText = (block) => {
+  if (block.value || block.caption || block.defaultCode) return block.value || block.caption || block.defaultCode;
+  if (block.type === 'stickers') return `${block.items?.length || 0} sticker${block.items?.length === 1 ? '' : 's'}`;
+  if (Array.isArray(block.items)) {
+    return block.items.map((item) => typeof item === 'string' ? item : item.text || item.value || item.label || '').filter(Boolean).join(' ');
+  }
+  return block.type;
+};
 
 export const SidebarLayout = ({
   projects,
@@ -43,6 +55,7 @@ export const SidebarLayout = ({
   currentPageData,
   backgroundPattern,
   setBackgroundPattern,
+  setBackgroundColor,
   confirmAction,
   handleSaveNewData,
   handleUpdateDocument,
@@ -132,16 +145,17 @@ export const SidebarLayout = ({
     setShowProjectSettings(false);
   };
 
-  const mapMarks = useMemo(() => (currentPageData?.content || []).map((block, index) => {
-    const rawText = block.value || block.caption || block.defaultCode || (block.items || []).join?.(' ') || block.type;
+  const mapMarks = useMemo(() => (currentPageData?.content || []).flatMap((block, index) => {
+    if (block.type === 'sticker' || block.type === 'stickers') return [];
+    const rawText = blockPreviewText(block);
     const title = block.type === 'heading' ? rawText : currentPageData?.title || block.type;
     const summary = String(rawText || '').replace(/\s+/g, ' ').trim();
-    return {
+    return [{
       id: `record-map-${activePage}-${index}`,
       summary: summary || block.type,
       title,
       type: block.type
-    };
+    }];
   }), [activePage, currentPageData?.content, currentPageData?.title]);
 
   const commands = (() => {
@@ -404,7 +418,7 @@ export const SidebarLayout = ({
 
           {!isSharedView && showProjectSettings && (
             <div className="sticky top-[66px] z-20 px-6 py-3 flex flex-wrap items-center justify-between gap-3 bg-inherit border-b" style={{ borderColor: activeTheme.borderColor }}>
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-3">
                 <label htmlFor="background-pattern" className="font-mono-tech text-[10px] uppercase opacity-60">
                   BG
                 </label>
@@ -424,6 +438,27 @@ export const SidebarLayout = ({
                   </select>
                   <ChevronDown className="pointer-events-none absolute right-2 h-3.5 w-3.5 opacity-60" />
                 </div>
+                <div className="flex items-center gap-1.5" aria-label="Background color">
+                  {PALETTE.map((theme) => {
+                    const selected = theme.bgColor === activeTheme.bgColor;
+                    return (
+                      <button
+                        key={theme.bgColor}
+                        type="button"
+                        onClick={() => setBackgroundColor(theme.bgColor)}
+                        className="h-7 w-7 border-2 cursor-pointer"
+                        style={{
+                          backgroundColor: theme.bgColor,
+                          borderColor: selected ? activeTheme.textColor : activeTheme.borderColor,
+                          boxShadow: selected ? `0 0 0 2px ${activeTheme.bgColor}, 0 0 0 4px ${activeTheme.textColor}` : 'none'
+                        }}
+                        title={`Use ${theme.bgColor}`}
+                        aria-label={`Use background color ${theme.bgColor}`}
+                        aria-pressed={selected}
+                      />
+                    );
+                  })}
+                </div>
               </div>
               <button
                 onClick={handleDeleteProject}
@@ -437,7 +472,15 @@ export const SidebarLayout = ({
 
           {/* Inner Content Area */}
           <div className="archive-inner p-6 md:p-12 lg:p-20 max-w-4xl mx-auto relative min-h-full">
-            {BG_SHADER_VARIANTS.includes(activeBackgroundPattern) ? (
+            {activeBackgroundPattern === 'beams' ? (
+              <BeamsBackground
+                aria-hidden="true"
+                className="pointer-events-none inset-y-0 left-1/2 z-0 w-[100vw] -translate-x-1/2 opacity-90"
+                backgroundColor={activeTheme.bgColor}
+                color={activeTheme.accentColor}
+                intensity={0.9}
+              />
+            ) : BG_SHADER_VARIANTS.includes(activeBackgroundPattern) ? (
               <DitheringShader
                 aria-hidden="true"
                 className="pointer-events-none absolute inset-y-0 left-1/2 z-0 h-full w-[100vw] -translate-x-1/2"

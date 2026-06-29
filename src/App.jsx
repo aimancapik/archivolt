@@ -14,7 +14,7 @@ import { normalizeSticker, pointerToStickerPoint, stickerPlacementStyle } from '
 const STORAGE_KEY = 'archivolt.projects';
 const SITE_PASSCODE = '246260';
 const SITE_ACCESS_KEY = 'archivolt.siteAccess';
-const BACKGROUND_OPTIONS = ['grid', 'dots', 'horizontal-lines', 'vertical-lines', 'checkerboard', 'wave', 'ripple', 'warp'];
+const BACKGROUND_OPTIONS = ['grid', 'dots', 'horizontal-lines', 'vertical-lines', 'checkerboard', 'wave', 'ripple', 'warp', 'beams'];
 const FALLBACK_BACKGROUND = 'dots';
 
 const randomBackgroundPattern = () => BACKGROUND_OPTIONS[Math.floor(Math.random() * BACKGROUND_OPTIONS.length)];
@@ -27,6 +27,18 @@ const getShareTarget = () => {
     projectId: params.get('project'),
     pageKey: params.get('page')
   };
+};
+
+const getPathTarget = () => {
+  const [projectId, pageKey] = window.location.pathname.split('/').filter(Boolean).map(decodeURIComponent);
+  return projectId && pageKey ? { projectId, pageKey } : {};
+};
+
+const setPathTarget = (projectId, pageKey) => {
+  const nextPath = `/${encodeURIComponent(projectId)}/${encodeURIComponent(pageKey)}`;
+  if (window.location.pathname !== nextPath) {
+    window.history.replaceState(null, '', `${nextPath}${window.location.search}`);
+  }
 };
 
 // --- PALETTE (inline styles only — no dynamic Tailwind) ---
@@ -59,6 +71,42 @@ const PALETTE = [
     bgColor: '#78838b', textColor: '#e4decd', accentColor: '#a8b5be',
     borderColor: 'rgba(228,222,205,0.15)',
     gradient: 'linear-gradient(180deg, #869099 0%, #78838b 50%, #6a757d 100%)',
+    pattern: 'dots',
+  },
+  {
+    bgColor: '#2f3a33', textColor: '#e4decd', accentColor: '#9fb58c',
+    borderColor: 'rgba(228,222,205,0.16)',
+    gradient: 'linear-gradient(180deg, #3b463e 0%, #2f3a33 50%, #232d27 100%)',
+    pattern: 'vertical-lines',
+  },
+  {
+    bgColor: '#8a2432', textColor: '#f1e7d3', accentColor: '#f0b2a2',
+    borderColor: 'rgba(241,231,211,0.18)',
+    gradient: 'linear-gradient(180deg, #9b3140 0%, #8a2432 50%, #681c28 100%)',
+    pattern: 'dots',
+  },
+  {
+    bgColor: '#273c5c', textColor: '#e9edf1', accentColor: '#9db7d9',
+    borderColor: 'rgba(233,237,241,0.17)',
+    gradient: 'linear-gradient(180deg, #31486a 0%, #273c5c 50%, #1e2e47 100%)',
+    pattern: 'grid',
+  },
+  {
+    bgColor: '#c7b06b', textColor: '#1a1b1c', accentColor: '#62532a',
+    borderColor: 'rgba(26,27,28,0.22)',
+    gradient: 'linear-gradient(180deg, #d2bd7c 0%, #c7b06b 50%, #ad9655 100%)',
+    pattern: 'checkerboard',
+  },
+  {
+    bgColor: '#d9d6cc', textColor: '#1a1b1c', accentColor: '#60645d',
+    borderColor: 'rgba(26,27,28,0.18)',
+    gradient: 'linear-gradient(180deg, #e5e1d7 0%, #d9d6cc 50%, #c7c3b8 100%)',
+    pattern: 'horizontal-lines',
+  },
+  {
+    bgColor: '#191f2a', textColor: '#e4decd', accentColor: '#8ca0c2',
+    borderColor: 'rgba(228,222,205,0.15)',
+    gradient: 'linear-gradient(180deg, #242b38 0%, #191f2a 50%, #10151f 100%)',
     pattern: 'dots',
   },
 ];
@@ -192,6 +240,7 @@ const loadProjects = () => {
 // --- MAIN APPLICATION ---
 export default function App() {
   const shareTarget = getShareTarget();
+  const pathTarget = getPathTarget();
   const [projects, setProjects] = useState(loadProjects);
   const [sharedProjects, setSharedProjects] = useState(null);
   const [shareError, setShareError] = useState('');
@@ -201,8 +250,8 @@ export default function App() {
     Boolean(shareTarget?.shareId) || localStorage.getItem(SITE_ACCESS_KEY) === '1'
   ));
   const [remoteReady, setRemoteReady] = useState(!isSupabaseConfigured);
-  const [activeProjectId, setActiveProjectId] = useState('nexus-ui');
-  const [activePage, setActivePage] = useState('getting_started');
+  const [activeProjectId, setActiveProjectId] = useState(pathTarget.projectId || 'nexus-ui');
+  const [activePage, setActivePage] = useState(pathTarget.pageKey || 'getting_started');
   const [isAddingData, setIsAddingData] = useState(false);
   const [isEditingData, setIsEditingData] = useState(false);
   const initialProjectsRef = React.useRef(projects);
@@ -220,7 +269,9 @@ export default function App() {
   const prevPageKey = currentIndex > 0 ? pageKeys[currentIndex - 1] : null;
   const nextPageKey = currentIndex < pageKeys.length - 1 ? pageKeys[currentIndex + 1] : null;
   const currentPageData = activeProject?.docs[activePage] || (activeProject ? Object.values(activeProject.docs)[0] : null);
-  const activeTheme = PALETTE[currentIndex >= 0 ? currentIndex % PALETTE.length : 0];
+  const baseTheme = PALETTE[currentIndex >= 0 ? currentIndex % PALETTE.length : 0];
+  const colorTheme = PALETTE.find((theme) => theme.bgColor === currentPageData?.backgroundColor);
+  const activeTheme = colorTheme || baseTheme;
   const backgroundPattern = currentPageData?.backgroundPattern || activeProject?.backgroundPattern || FALLBACK_BACKGROUND;
   const feedback = useFeedback(activeTheme);
 
@@ -232,6 +283,15 @@ export default function App() {
       saveRemoteProjects(projects).catch((error) => console.warn('Supabase save failed:', error.message));
     }
   }, [projects, remoteReady, shareTarget?.shareId]);
+
+  useEffect(() => {
+    if (shareTarget?.shareId || !hasProjects) return;
+    const projectId = visibleProjects[activeProjectId] ? activeProjectId : Object.keys(visibleProjects)[0];
+    const pageKeys = orderedPageKeys(visibleProjects[projectId].docs);
+    if (projectId !== activeProjectId) setActiveProjectId(projectId);
+    if (!visibleProjects[projectId].docs[activePage]) setActivePage(pageKeys[0]);
+    setPathTarget(projectId, visibleProjects[projectId].docs[activePage] ? activePage : pageKeys[0]);
+  }, [activePage, activeProjectId, hasProjects, shareTarget?.shareId, visibleProjects]);
 
   useEffect(() => {
     if (!isSupabaseConfigured || shareTarget?.shareId) return;
@@ -486,6 +546,25 @@ export default function App() {
             [activePage]: {
               ...prev[activeProjectId].docs[activePage],
               backgroundPattern: pattern
+            }
+          }
+        }
+      };
+    });
+  };
+
+  const setBackgroundColor = (color) => {
+    setProjects((prev) => {
+      if (!prev[activeProjectId]?.docs?.[activePage]) return prev;
+      return {
+        ...prev,
+        [activeProjectId]: {
+          ...prev[activeProjectId],
+          docs: {
+            ...prev[activeProjectId].docs,
+            [activePage]: {
+              ...prev[activeProjectId].docs[activePage],
+              backgroundColor: color
             }
           }
         }
@@ -768,6 +847,7 @@ export default function App() {
           currentPageData={currentPageData}
           backgroundPattern={backgroundPattern}
           setBackgroundPattern={setBackgroundPattern}
+          setBackgroundColor={setBackgroundColor}
           handleSaveNewData={handleSaveNewData}
           handleUpdateDocument={handleUpdateDocument}
           handleDeleteDocument={handleDeleteDocument}

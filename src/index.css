@@ -257,12 +257,15 @@ select:focus-visible,
 }
 
 .section-map-rail {
-  position: absolute;
-  left: clamp(-26px, -1.8vw, -14px);
-  top: clamp(150px, 38vh, 340px);
+  position: sticky;
+  top: 50%;
+  margin-left: clamp(-76px, -5vw, -52px);
+  height: 0;
+  transform: translateY(-50%);
   z-index: 35;
   display: flex;
   flex-direction: column;
+  width: 44px;
 }
 
 .section-map-rail__item {
@@ -367,7 +370,7 @@ select:focus-visible,
 
 @media (min-width: 900px) {
   .section-map-rail {
-    left: clamp(-44px, -3vw, -24px);
+    margin-left: clamp(-118px, -7vw, -86px);
   }
 
   .section-map-preview {
@@ -442,8 +445,8 @@ select:focus-visible,
   }
 
   .section-map-rail {
-    left: 16px;
-    top: 150px;
+    margin-left: 16px;
+    top: 50%;
   }
 
   .section-map-rail__mark:hover::after,
