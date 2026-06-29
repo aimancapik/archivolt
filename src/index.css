@@ -258,7 +258,7 @@ select:focus-visible,
 
 .section-map-rail {
   position: absolute;
-  left: clamp(12px, 1.6vw, 26px);
+  left: clamp(-26px, -1.8vw, -14px);
   top: clamp(150px, 38vh, 340px);
   z-index: 35;
   display: flex;
@@ -367,7 +367,7 @@ select:focus-visible,
 
 @media (min-width: 900px) {
   .section-map-rail {
-    left: clamp(16px, 2vw, 32px);
+    left: clamp(-44px, -3vw, -24px);
   }
 
   .section-map-preview {
