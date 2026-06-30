@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { X, GripVertical, Trash2, Save, Plus, Image, ChevronUp, ChevronDown, RotateCcw, Upload, FileText, Copy, Check, Undo2 } from 'lucide-react';
+import { X, GripVertical, Trash2, Save, Plus, Image, ChevronUp, ChevronDown, RotateCcw, Upload, FileText, Copy, Check, Undo2, Eye, Pencil, Heading1, Pilcrow, Code, Play, List, ListChecks, Sticker, FolderOpen } from 'lucide-react';
 import { cn } from '../utils/helpers';
 import { checklistItemsFromText, checklistTextFromItems } from '../utils/checklist';
 import { markdownToBlocks } from '../utils/markdownToBlocks';
@@ -29,6 +29,7 @@ const blockFromContent = (block, index) => {
     y: block.y || 0,
     width: block.width || 180,
     rotation: block.rotation || 0,
+    galleryFiles: block.type === 'gallery' ? [] : undefined,
     stickers,
     selectedStickerId: stickers[0]?.id || null
   };
@@ -39,7 +40,7 @@ const formSignature = ({ recordType, projectName, version, pageTitle, blocks }) 
   projectName,
   version,
   pageTitle,
-  blocks: blocks.map(({ type, value, language, url, file, x, y, width, rotation, stickers }) => ({
+  blocks: blocks.map(({ type, value, language, url, file, x, y, width, rotation, stickers, galleryFiles }) => ({
     type,
     value,
     language,
@@ -49,6 +50,7 @@ const formSignature = ({ recordType, projectName, version, pageTitle, blocks }) 
     y,
     width,
     rotation,
+    galleryFiles: galleryFiles?.map((galleryFile) => galleryFile.file?.name || ''),
     stickers: stickers?.map(({ url, file, x, y, width, rotation, placed }) => ({ url, fileName: file?.name || '', x, y, width, rotation, placed }))
   }))
 });
@@ -68,6 +70,24 @@ const previewBlockForRender = (block) => {
   }
   if (block.type === 'playground') {
     return { ...block, defaultCode: block.value };
+  }
+  if (block.type === 'gallery') {
+    return {
+      ...block,
+      value: [
+        block.value,
+        ...(block.galleryFiles || []).map((galleryFile) => galleryFile.previewUrl)
+      ].filter(Boolean).join('\n')
+    };
+  }
+  if (block.type === 'stickers') {
+    return {
+      ...block,
+      items: (block.stickers || []).map((sticker) => ({
+        ...sticker,
+        url: sticker.previewUrl || sticker.url
+      }))
+    };
   }
   return block;
 };
@@ -126,6 +146,8 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
   const [promptCopied, setPromptCopied] = useState(false);
   const [collapsedBlockIds, setCollapsedBlockIds] = useState(() => new Set());
   const [canUndoBlocks, setCanUndoBlocks] = useState(false);
+  const [isPreviewing, setIsPreviewing] = useState(false);
+  const [isImportOpen, setIsImportOpen] = useState(false);
 
   // Blocks list state - initialized with a Heading block and a Text block
   const [blocks, setBlocks] = useState(() => {
@@ -154,11 +176,23 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
     [recordType, projectName, version, pageTitle, blocks]
   );
   const [initialSignature] = useState(currentSignature);
+  const isDirty = currentSignature !== initialSignature;
 
   // Drag states
   const [draggedIndex, setDraggedIndex] = useState(null);
   const [dragReadyBlockId, setDragReadyBlockId] = useState(null);
   const hasStickerBlock = blocks.some((block) => block.type === 'stickers');
+  const insertButtons = [
+    ['heading', Heading1, 'HEADING'],
+    ['text', Pilcrow, 'NOTE / TEXT'],
+    ['code', Code, 'CODE BLOCK'],
+    ['playground', Play, 'PLAYGROUND'],
+    ['list', List, 'LIST'],
+    ['checklist', ListChecks, 'CHECKLIST'],
+    ['image', Image, 'IMAGE'],
+    ['gallery', FolderOpen, 'GALLERY'],
+    ['stickers', Sticker, 'STICKERS', hasStickerBlock]
+  ];
 
   const blockSummary = (block) => {
     if (block.type === 'stickers') return `${block.stickers?.filter((sticker) => sticker.placed).length || 0}/${block.stickers?.length || 0} placed`;
@@ -208,11 +242,21 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
     if (type === 'checklist') {
       defaultVal = '[ ] ';
     }
+    if (type === 'gallery') {
+      defaultVal = [
+        'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=800&auto=format&fit=crop',
+        'https://images.unsplash.com/photo-1604871000636-074fa5117945?q=80&w=800&auto=format&fit=crop',
+        'https://images.unsplash.com/photo-1550684848-fac1c5b4e853?q=80&w=800&auto=format&fit=crop',
+        'https://images.unsplash.com/photo-1513506003901-1e6a229e2d15?q=80&w=800&auto=format&fit=crop',
+        'https://images.unsplash.com/photo-1525547719571-a2d4ac8945e2?q=80&w=800&auto=format&fit=crop'
+      ].join('\n');
+    }
     const newBlock = {
       id: `${Date.now()}${Math.random().toString(36).substr(2, 5)}`,
       type,
       value: defaultVal,
-      language: type === 'code' ? 'javascript' : undefined,
+      language: type === 'code' ? 'javascript' : type === 'gallery' ? 'VISUAL_REFERENCES.gallery' : undefined,
+      galleryFiles: type === 'gallery' ? [] : undefined,
       stickers: type === 'stickers' ? [] : undefined,
       selectedStickerId: null
     };
@@ -279,6 +323,25 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
     updateBlocks((prev) =>
       prev.map((b) => (b.id === id ? { ...b, file, previewUrl: file ? URL.createObjectURL(file) : '' } : b))
     );
+  };
+
+  const addGalleryFiles = (id, files) => {
+    const galleryFiles = Array.from(files || []).map((file) => ({
+      id: `${Date.now()}${Math.random().toString(36).slice(2, 7)}`,
+      file,
+      previewUrl: URL.createObjectURL(file)
+    }));
+    updateBlocks((prev) => prev.map((b) => b.id === id ? {
+      ...b,
+      galleryFiles: [...(b.galleryFiles || []), ...galleryFiles]
+    } : b));
+  };
+
+  const deleteGalleryFile = (blockId, fileId) => {
+    updateBlocks((prev) => prev.map((b) => b.id === blockId ? {
+      ...b,
+      galleryFiles: (b.galleryFiles || []).filter((galleryFile) => galleryFile.id !== fileId)
+    } : b));
   };
 
   const updateBlockMeta = (id, key, value) => {
@@ -390,7 +453,11 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
         notify(`Block #${i + 1} needs at least one placed sticker`, 'danger');
         return;
       }
-      if (!['image', 'sticker', 'stickers', 'demo-input'].includes(blocks[i].type) && !blocks[i].value.trim()) {
+      if (blocks[i].type === 'gallery' && !blocks[i].value.trim() && !blocks[i].galleryFiles?.length) {
+        notify(`Block #${i + 1} needs at least one gallery image`, 'danger');
+        return;
+      }
+      if (!['image', 'sticker', 'stickers', 'demo-input', 'gallery'].includes(blocks[i].type) && !blocks[i].value.trim()) {
         notify(`Block #${i + 1} (${blocks[i].type.toUpperCase()}) cannot be empty`, 'danger');
         return;
       }
@@ -414,11 +481,20 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
 
   return (
     <div className="animate-fade-in text-inherit">
-      <div className="flex items-center justify-between mb-8 pb-4" style={{ borderBottom: `2px solid ${theme.textColor}` }}>
+      <div className="flex items-center justify-between gap-4 mb-8 pb-4" style={{ borderBottom: `2px solid ${theme.textColor}` }}>
         <div>
-          <h2 className="font-display text-2xl font-bold uppercase" style={{ letterSpacing: '-0.03em' }}>DATA ENTRY TERMINAL</h2>
+          <div className="flex flex-wrap items-center gap-3">
+            <h2 className="font-display text-2xl font-bold uppercase" style={{ letterSpacing: '-0.03em' }}>DATA ENTRY TERMINAL</h2>
+            <span
+              className="border px-2 py-1 font-mono-tech text-[9px] font-bold uppercase"
+              style={{ borderColor: isDirty ? theme.textColor : theme.borderColor, opacity: isDirty ? 1 : 0.5 }}
+              aria-live="polite"
+            >
+              {isDirty ? 'UNSAVED' : 'SAVED'}
+            </span>
+          </div>
           <p className="font-mono-tech mt-1" style={{ fontSize: '10px', opacity: 0.6 }}>
-            {isEditing ? 'EDITING CURRENT DOCUMENT' : recordType === 'document' ? `AWAITING NEW DOCUMENT LOG FOR ${activeProject ? activeProject.name : ''}` : 'AWAITING NEW DIRECTORY INPUT...'}
+            {isEditing ? `EDITING: ${pageTitle}` : recordType === 'document' ? `AWAITING NEW DOCUMENT LOG FOR ${activeProject ? activeProject.name : ''}` : 'AWAITING NEW DIRECTORY INPUT...'}
           </p>
         </div>
         <button type="button" onClick={onCancel} className="p-2 transition-colors cursor-pointer" style={{ border: `1px solid ${theme.textColor}`, background: 'transparent', color: 'inherit' }} aria-label="Close editor">
@@ -493,9 +569,64 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
 
         {/* Dynamic Blocks Section */}
         <div className="space-y-3">
-          <label className="font-mono-tech uppercase font-bold block" style={{ fontSize: '9px', letterSpacing: '0.12em' }}>DOCUMENT_STRUCTURE (DRAG TO REORDER)</label>
+          <div className="editor-toolbar sticky top-0 z-20 border-b px-2 py-2 backdrop-blur" style={{ borderColor: theme.borderColor, background: theme.bgColor }}>
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-baseline gap-3">
+                <label className="font-mono-tech uppercase font-bold" style={{ fontSize: '9px', letterSpacing: '0.12em' }}>DOCUMENT_STRUCTURE</label>
+                <span className="font-mono-tech text-[9px] uppercase opacity-45">{blocks.length} blocks</span>
+              </div>
+              <div className="retro-toggle-group shrink-0" style={{ borderColor: theme.textColor }}>
+                <button
+                  type="button"
+                  onClick={() => setIsPreviewing(false)}
+                  className="retro-toggle-btn cursor-pointer flex items-center gap-1.5"
+                  style={!isPreviewing ? { backgroundColor: theme.textColor, color: theme.bgColor } : { color: theme.textColor }}
+                >
+                  <Pencil className="w-3.5 h-3.5" /> EDIT
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsPreviewing(true)}
+                  className="retro-toggle-btn cursor-pointer flex items-center gap-1.5"
+                  style={isPreviewing ? { backgroundColor: theme.textColor, color: theme.bgColor } : { color: theme.textColor }}
+                >
+                  <Eye className="w-3.5 h-3.5" /> PREVIEW
+                </button>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="shrink-0 font-mono-tech text-[9px] uppercase opacity-50">ADD</span>
+              <div className="flex min-w-0 flex-1 gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+                {insertButtons.map(([type, Icon, label, isUnavailable]) => (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => {
+                      if (isUnavailable) {
+                        setIsPreviewing(false);
+                        notify('Sticker block already exists');
+                        return;
+                      }
+                      addBlock(type);
+                    }}
+                    className="grid h-9 w-9 shrink-0 place-items-center border cursor-pointer transition-colors hover:bg-[rgba(255,255,255,0.05)]"
+                    style={{ borderColor: theme.borderColor, color: theme.textColor, borderRadius: '4px', background: 'transparent', opacity: isUnavailable ? 0.45 : 1 }}
+                    title={isUnavailable ? 'Sticker block already exists' : `Add ${label.toLowerCase()}`}
+                    aria-label={isUnavailable ? 'Sticker block already exists' : `Add ${label.toLowerCase()}`}
+                    aria-disabled={isUnavailable}
+                  >
+                    <Icon className="w-4 h-4" />
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
           
-          <div className="block-editor-list">
+          {isPreviewing ? (
+            <div className="border p-6 md:p-10" style={{ borderColor: theme.borderColor, background: 'rgba(0,0,0,0.08)' }}>
+              {blocks.map((block, index) => renderContent(previewBlockForRender(block), index))}
+            </div>
+          ) : <div className="block-editor-list">
             {blocks.map((block, index) => {
               const isDragged = draggedIndex === index;
               const isCollapsed = collapsedBlockIds.has(block.id);
@@ -627,6 +758,83 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
                           required
                           spellCheck="false"
                         />
+                      </div>
+                    )}
+
+                    {block.type === 'gallery' && (
+                      <div className="space-y-3">
+                        <div>
+                          <label className="font-mono-tech block text-[9px] uppercase opacity-45 mb-1">FOLDER NAME</label>
+                          <input
+                            type="text"
+                            value={block.language || ''}
+                            onChange={(e) => updateBlockLanguage(block.id, e.target.value)}
+                            aria-label={`Gallery folder name for block ${index + 1}`}
+                            className="w-full p-2 bg-transparent font-mono-tech focus:outline-none"
+                            style={{ borderBottom: `1px solid ${theme.textColor}`, fontSize: '13px', color: 'inherit' }}
+                            placeholder="VISUAL_REFERENCES.gallery"
+                          />
+                        </div>
+                        <div>
+                          <label className="font-mono-tech block text-[9px] uppercase opacity-45 mb-1">IMAGE URLS</label>
+                          <textarea
+                            value={block.value}
+                            onChange={(e) => updateBlockValue(block.id, e.target.value)}
+                            aria-label={`Gallery image URLs for block ${index + 1}`}
+                            className="w-full p-3 font-mono-tech focus:outline-none resize-y"
+                            style={{
+                              background: 'rgba(0,0,0,0.3)',
+                              border: `1px solid ${theme.borderColor}`,
+                              color: '#e4decd',
+                              fontSize: '12px',
+                              minHeight: '100px'
+                            }}
+                            placeholder="One image URL per line..."
+                          />
+                        </div>
+                        <input
+                          id={`gallery-upload-${block.id}`}
+                          type="file"
+                          accept="image/*"
+                          multiple
+                          onChange={(e) => addGalleryFiles(block.id, e.target.files)}
+                          aria-label={`Gallery files for block ${index + 1}`}
+                          className="sr-only"
+                        />
+                        <div className="flex flex-wrap items-center gap-3">
+                          <label
+                            htmlFor={`gallery-upload-${block.id}`}
+                            className="inline-flex items-center gap-2 border px-3 py-2 font-mono-tech text-[10px] uppercase cursor-pointer transition-colors hover:bg-[rgba(255,255,255,0.06)]"
+                            style={{ borderColor: theme.textColor, color: theme.textColor }}
+                          >
+                            <Upload size={14} /> Upload Images
+                          </label>
+                          <span className="font-mono-tech text-[10px] uppercase opacity-55">
+                            {(block.galleryFiles || []).length ? `${block.galleryFiles.length} pending upload` : 'Paste URLs or upload files'}
+                          </span>
+                        </div>
+                        {!!block.galleryFiles?.length && (
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {block.galleryFiles.map((galleryFile) => (
+                              <div
+                                key={galleryFile.id}
+                                className="relative h-20 w-20"
+                                style={{ border: `1px solid ${theme.borderColor}` }}
+                              >
+                                <img src={galleryFile.previewUrl} alt="" className="h-full w-full object-cover" />
+                                <button
+                                  type="button"
+                                  onClick={() => deleteGalleryFile(block.id, galleryFile.id)}
+                                  className="absolute -right-2 -top-2 grid h-5 w-5 place-items-center border cursor-pointer opacity-75 transition-opacity hover:opacity-100"
+                                  style={{ borderColor: theme.borderColor, background: theme.bgColor, color: theme.textColor }}
+                                  aria-label="Remove gallery image"
+                                >
+                                  <X size={12} />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     )}
 
@@ -920,6 +1128,11 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
                         INTERACTIVE INPUT DEMO
                       </div>
                     )}
+                    {block.type === 'gallery' && (
+                      <div className="font-mono-tech text-[10px] uppercase opacity-60 py-3">
+                        INTERACTIVE FOLDER GALLERY: {(block.value || '').split('\n').filter(Boolean).length} IMAGES
+                      </div>
+                    )}
                     </div>
                   </div>
 
@@ -940,83 +1153,20 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
                 </div>
               );
             })}
-          </div>
-
-          {/* Add block button group */}
-          <div className="pt-4 border-t border-dashed" style={{ borderColor: 'rgba(255,255,255,0.1)' }}>
-            <label className="font-mono-tech uppercase font-bold block mb-3" style={{ fontSize: '9px', letterSpacing: '0.12em' }}>INSERT_BLOCK</label>
-            <div className="flex flex-wrap gap-3">
-              <button
-                type="button"
-                onClick={() => addBlock('heading')}
-                className="px-4 py-2 border font-mono-tech text-xs cursor-pointer hover:bg-[rgba(255,255,255,0.05)] transition-colors flex items-center gap-1.5"
-                style={{ borderColor: theme.textColor, color: theme.textColor, borderRadius: '4px', background: 'transparent' }}
-              >
-                <Plus className="w-3.5 h-3.5" /> HEADING
-              </button>
-              <button
-                type="button"
-                onClick={() => addBlock('text')}
-                className="px-4 py-2 border font-mono-tech text-xs cursor-pointer hover:bg-[rgba(255,255,255,0.05)] transition-colors flex items-center gap-1.5"
-                style={{ borderColor: theme.textColor, color: theme.textColor, borderRadius: '4px', background: 'transparent' }}
-              >
-                <Plus className="w-3.5 h-3.5" /> NOTE / TEXT
-              </button>
-              <button
-                type="button"
-                onClick={() => addBlock('code')}
-                className="px-4 py-2 border font-mono-tech text-xs cursor-pointer hover:bg-[rgba(255,255,255,0.05)] transition-colors flex items-center gap-1.5"
-                style={{ borderColor: theme.textColor, color: theme.textColor, borderRadius: '4px', background: 'transparent' }}
-              >
-                <Plus className="w-3.5 h-3.5" /> CODE BLOCK
-              </button>
-              <button
-                type="button"
-                onClick={() => addBlock('playground')}
-                className="px-4 py-2 border font-mono-tech text-xs cursor-pointer hover:bg-[rgba(255,255,255,0.05)] transition-colors flex items-center gap-1.5"
-                style={{ borderColor: theme.textColor, color: theme.textColor, borderRadius: '4px', background: 'transparent' }}
-              >
-                <Plus className="w-3.5 h-3.5" /> PLAYGROUND
-              </button>
-              <button
-                type="button"
-                onClick={() => addBlock('list')}
-                className="px-4 py-2 border font-mono-tech text-xs cursor-pointer hover:bg-[rgba(255,255,255,0.05)] transition-colors flex items-center gap-1.5"
-                style={{ borderColor: theme.textColor, color: theme.textColor, borderRadius: '4px', background: 'transparent' }}
-              >
-                <Plus className="w-3.5 h-3.5" /> LIST
-              </button>
-              <button
-                type="button"
-                onClick={() => addBlock('checklist')}
-                className="px-4 py-2 border font-mono-tech text-xs cursor-pointer hover:bg-[rgba(255,255,255,0.05)] transition-colors flex items-center gap-1.5"
-                style={{ borderColor: theme.textColor, color: theme.textColor, borderRadius: '4px', background: 'transparent' }}
-              >
-                <Plus className="w-3.5 h-3.5" /> CHECKLIST
-              </button>
-              <button
-                type="button"
-                onClick={() => addBlock('image')}
-                className="px-4 py-2 border font-mono-tech text-xs cursor-pointer hover:bg-[rgba(255,255,255,0.05)] transition-colors flex items-center gap-1.5"
-                style={{ borderColor: theme.textColor, color: theme.textColor, borderRadius: '4px', background: 'transparent' }}
-              >
-                <Image className="w-3.5 h-3.5" /> IMAGE
-              </button>
-              {!hasStickerBlock && (
-                <button
-                  type="button"
-                  onClick={() => addBlock('stickers')}
-                  className="px-4 py-2 border font-mono-tech text-xs cursor-pointer hover:bg-[rgba(255,255,255,0.05)] transition-colors flex items-center gap-1.5"
-                  style={{ borderColor: theme.textColor, color: theme.textColor, borderRadius: '4px', background: 'transparent' }}
-                >
-                  <Image className="w-3.5 h-3.5" /> STICKERS
-                </button>
-              )}
-            </div>
-          </div>
+          </div>}
 
           <div className="space-y-2 pt-4 border-t border-dashed" style={{ borderColor: 'rgba(255,255,255,0.1)' }}>
-            <label className="font-mono-tech uppercase font-bold block" style={{ fontSize: '9px', letterSpacing: '0.12em' }}>IMPORT_MARKDOWN</label>
+            <button
+              type="button"
+              onClick={() => setIsImportOpen((value) => !value)}
+              className="flex w-full items-center justify-between font-mono-tech uppercase font-bold cursor-pointer"
+              style={{ fontSize: '9px', letterSpacing: '0.12em', color: 'inherit' }}
+              aria-expanded={isImportOpen}
+            >
+              IMPORT_MARKDOWN
+              {isImportOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+            </button>
+            {isImportOpen && <>
             <textarea
               value={markdownInput}
               onChange={(e) => setMarkdownInput(e.target.value)}
@@ -1054,6 +1204,7 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
                 CLEAR
               </button>
             </div>
+            </>}
           </div>
         </div>
 

@@ -247,6 +247,10 @@ body { margin: 0; overflow: hidden; background: #0a0a0b; }
   transform: scale(0.95);
 }
 
+.editor-toolbar {
+  margin-inline: -2px;
+}
+
 button:focus-visible,
 input:focus-visible,
 textarea:focus-visible,
@@ -388,6 +392,39 @@ select:focus-visible,
 }
 
 @media (max-width: 640px) {
+  .block-editor-item {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .block-editor-item > .flex-1 {
+    grid-column: 1 / -1;
+    order: 3;
+  }
+
+  .block-editor-item > .flex.items-center {
+    order: 2;
+    align-self: start;
+    margin-left: 0;
+  }
+
+  .block-editor-item > .flex.flex-col {
+    order: 1;
+    flex-direction: row;
+    align-items: center;
+    align-self: start;
+    min-width: 52px;
+    padding-top: 0;
+  }
+
+  .editor-toolbar {
+    top: 0;
+    margin-inline: -6px;
+    padding-inline: 6px;
+  }
+
   .archive-shell {
     flex-direction: column !important;
     height: 94vh !important;

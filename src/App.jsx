@@ -18,6 +18,13 @@ const SITE_PASSCODE = '246260';
 const SITE_ACCESS_KEY = 'archivolt.siteAccess';
 const BACKGROUND_OPTIONS = ['grid', 'dots', 'horizontal-lines', 'vertical-lines', 'checkerboard', 'wave', 'ripple', 'warp', 'beams'];
 const FALLBACK_BACKGROUND = 'dots';
+const InteractiveFolderGallery = React.lazy(() => import('./components/ui/interactive-folder-gallery').then((module) => ({ default: module.InteractiveFolderGallery })));
+
+const galleryPhotosFromText = (value = '') => value
+  .split('\n')
+  .map((image) => image.trim())
+  .filter(Boolean)
+  .map((image, index) => ({ id: `${index}-${image}`, image }));
 
 const randomBackgroundPattern = () => BACKGROUND_OPTIONS[Math.floor(Math.random() * BACKGROUND_OPTIONS.length)];
 const getShareTarget = () => {
@@ -379,6 +386,12 @@ export default function App() {
         ...normalizeSticker(sticker),
         placed: true
       })));
+    }
+
+    if (b.type === 'gallery') {
+      const existingUrls = b.value.split('\n').map((item) => item.trim()).filter(Boolean);
+      const uploadedUrls = await Promise.all((b.galleryFiles || []).map((galleryFile) => uploadImage(galleryFile.file, folder)));
+      block.value = [...existingUrls, ...uploadedUrls].join('\n');
     }
 
     if (b.type === 'list') {
@@ -842,6 +855,17 @@ export default function App() {
             {block.caption && <figcaption className="font-mono-tech uppercase mt-2" style={{ fontSize: '9px', color: '#888' }}>{block.caption}</figcaption>}
           </figure>
         );
+      case 'gallery': {
+        const galleryPhotos = galleryPhotosFromText(block.value);
+        return (
+          <React.Suspense key={index} fallback={<div className="font-mono-tech text-[10px] uppercase opacity-60 py-10">Loading gallery...</div>}>
+            <InteractiveFolderGallery
+              folderName={block.language || 'VISUAL_REFERENCES.gallery'}
+              photos={galleryPhotos.length ? galleryPhotos : undefined}
+            />
+          </React.Suspense>
+        );
+      }
       case 'sticker':
         return (
           <img
