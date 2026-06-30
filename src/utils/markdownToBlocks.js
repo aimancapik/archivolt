@@ -16,10 +16,16 @@ const flushList = (blocks, list) => {
   list.length = 0;
 };
 
+const flushChecklist = (blocks, checklist) => {
+  if (checklist.length) blocks.push(newBlock('checklist', checklist.join('\n')));
+  checklist.length = 0;
+};
+
 export const markdownToBlocks = (markdown) => {
   const blocks = [];
   const paragraph = [];
   const list = [];
+  const checklist = [];
   const lines = String(markdown || '').replace(/\r\n?/g, '\n').split('\n');
   let code = null;
 
@@ -32,6 +38,7 @@ export const markdownToBlocks = (markdown) => {
       } else {
         flushParagraph(blocks, paragraph);
         flushList(blocks, list);
+        flushChecklist(blocks, checklist);
         code = { language: fence[1], lines: [] };
       }
       continue;
@@ -46,13 +53,23 @@ export const markdownToBlocks = (markdown) => {
     if (heading) {
       flushParagraph(blocks, paragraph);
       flushList(blocks, list);
+      flushChecklist(blocks, checklist);
       blocks.push(newBlock('heading', heading[2].trim()));
+      continue;
+    }
+
+    const checklistItem = line.match(/^\s*[-*]\s+\[(x|X| )\]\s+(.+)$/);
+    if (checklistItem) {
+      flushParagraph(blocks, paragraph);
+      flushList(blocks, list);
+      checklist.push(`[${checklistItem[1]}] ${checklistItem[2].trim()}`);
       continue;
     }
 
     const listItem = line.match(/^\s*(?:[-*]|\d+\.)\s+(.+)$/);
     if (listItem) {
       flushParagraph(blocks, paragraph);
+      flushChecklist(blocks, checklist);
       list.push(listItem[1].trim());
       continue;
     }
@@ -60,16 +77,19 @@ export const markdownToBlocks = (markdown) => {
     if (!line.trim()) {
       flushParagraph(blocks, paragraph);
       flushList(blocks, list);
+      flushChecklist(blocks, checklist);
       continue;
     }
 
     flushList(blocks, list);
+    flushChecklist(blocks, checklist);
     paragraph.push(line);
   }
 
   if (code) blocks.push(newBlock('code', code.lines.join('\n'), { language: code.language || 'javascript' }));
   flushParagraph(blocks, paragraph);
   flushList(blocks, list);
+  flushChecklist(blocks, checklist);
 
   return blocks.length ? blocks : [newBlock('text', String(markdown || '').trim())].filter((block) => block.value);
 };

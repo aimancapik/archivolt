@@ -22,3 +22,19 @@ assert.deepEqual(
     { type: 'list', value: 'Builds a path\nUploads the file\nReturns the URL', language: undefined }
   ]
 );
+
+const checklistBlocks = markdownToBlocks(`## Follow up
+
+- [ ] Take photo
+- [x] Save report
+
+- Normal bullet`);
+
+assert.deepEqual(
+  checklistBlocks.map(({ type, value }) => ({ type, value })),
+  [
+    { type: 'heading', value: 'Follow up' },
+    { type: 'checklist', value: '[ ] Take photo\n[x] Save report' },
+    { type: 'list', value: 'Normal bullet' }
+  ]
+);

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Plus, ArrowLeft, ArrowRight, ChevronDown, Edit3, Trash2, Settings, Pin, Search, Share2 } from 'lucide-react';
+import { Plus, ArrowLeft, ArrowRight, ChevronDown, Edit3, Trash2, Settings, Pin, Search, Share2, Home } from 'lucide-react';
 import { BGPattern } from '../components/ui/bg-pattern';
 import { BeamsBackground } from '../components/ui/beams-background';
 import { DitheringShader } from '../components/ui/dithering-shader';
@@ -66,7 +66,8 @@ export const SidebarLayout = ({
   orderedPageKeys,
   renderContent,
   isSharedView = false,
-  createShareLink
+  createShareLink,
+  goHome
 }) => {
   const [commandOpen, setCommandOpen] = useState(false);
   const [activeMapIndex, setActiveMapIndex] = useState(0);
@@ -340,6 +341,15 @@ export const SidebarLayout = ({
             </div>
 
             {!isSharedView && <div className="flex items-center gap-4">
+              <button
+                onClick={goHome}
+                className="p-2 border-2 transition-colors cursor-pointer"
+                style={{ borderColor: activeTheme.textColor, color: activeTheme.textColor }}
+                title="Home"
+                aria-label="Go to home"
+              >
+                <Home className="w-5 h-5" />
+              </button>
               <button
                 onClick={() => setCommandOpen(true)}
                 className="p-2 border-2 transition-colors cursor-pointer"

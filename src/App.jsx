@@ -12,6 +12,7 @@ import { orderedPageKeys } from './utils/pageOrder';
 import { normalizeSticker, pointerToStickerPoint, stickerPlacementStyle } from './utils/stickerPlacement';
 
 const STORAGE_KEY = 'archivolt.projects';
+const RECENT_KEY = 'archivolt.recentTarget';
 const SITE_PASSCODE = '246260';
 const SITE_ACCESS_KEY = 'archivolt.siteAccess';
 const BACKGROUND_OPTIONS = ['grid', 'dots', 'horizontal-lines', 'vertical-lines', 'checkerboard', 'wave', 'ripple', 'warp', 'beams'];
@@ -39,6 +40,10 @@ const setPathTarget = (projectId, pageKey) => {
   if (window.location.pathname !== nextPath) {
     window.history.replaceState(null, '', `${nextPath}${window.location.search}`);
   }
+};
+
+const setHomePath = () => {
+  if (window.location.pathname !== '/') window.history.replaceState(null, '', `/${window.location.search}`);
 };
 
 // --- PALETTE (inline styles only — no dynamic Tailwind) ---
@@ -252,6 +257,7 @@ export default function App() {
   const [remoteReady, setRemoteReady] = useState(!isSupabaseConfigured);
   const [activeProjectId, setActiveProjectId] = useState(pathTarget.projectId || 'nexus-ui');
   const [activePage, setActivePage] = useState(pathTarget.pageKey || 'getting_started');
+  const [isHomeScreen, setIsHomeScreen] = useState(() => !shareTarget && !pathTarget.projectId);
   const [isAddingData, setIsAddingData] = useState(false);
   const [isEditingData, setIsEditingData] = useState(false);
   const initialProjectsRef = React.useRef(projects);
@@ -285,13 +291,18 @@ export default function App() {
   }, [projects, remoteReady, shareTarget?.shareId]);
 
   useEffect(() => {
-    if (shareTarget?.shareId || !hasProjects) return;
+    if (isHomeScreen || shareTarget?.shareId || !hasProjects) return;
     const projectId = visibleProjects[activeProjectId] ? activeProjectId : Object.keys(visibleProjects)[0];
     const pageKeys = orderedPageKeys(visibleProjects[projectId].docs);
     if (projectId !== activeProjectId) setActiveProjectId(projectId);
     if (!visibleProjects[projectId].docs[activePage]) setActivePage(pageKeys[0]);
     setPathTarget(projectId, visibleProjects[projectId].docs[activePage] ? activePage : pageKeys[0]);
-  }, [activePage, activeProjectId, hasProjects, shareTarget?.shareId, visibleProjects]);
+  }, [activePage, activeProjectId, hasProjects, isHomeScreen, shareTarget?.shareId, visibleProjects]);
+
+  useEffect(() => {
+    if (isHomeScreen || shareTarget || !activeProject?.docs?.[activePage]) return;
+    localStorage.setItem(RECENT_KEY, JSON.stringify({ projectId: activeProjectId, pageKey: activePage }));
+  }, [activePage, activeProject?.docs, activeProjectId, isHomeScreen, shareTarget]);
 
   useEffect(() => {
     if (!isSupabaseConfigured || shareTarget?.shareId) return;
@@ -379,6 +390,119 @@ export default function App() {
 
     return block;
   }));
+
+  const openDocument = (projectId, pageKey) => {
+    setActiveProjectId(projectId);
+    setActivePage(pageKey);
+    setIsHomeScreen(false);
+    setIsAddingData(false);
+    setIsEditingData(false);
+    setPathTarget(projectId, pageKey);
+  };
+
+  const openProject = (projectId) => {
+    const firstPage = orderedPageKeys(visibleProjects[projectId]?.docs || {})[0];
+    if (firstPage) openDocument(projectId, firstPage);
+  };
+
+  const continueRecent = () => {
+    try {
+      const recent = JSON.parse(localStorage.getItem(RECENT_KEY) || '{}');
+      if (visibleProjects[recent.projectId]?.docs?.[recent.pageKey]) {
+        openDocument(recent.projectId, recent.pageKey);
+        return;
+      }
+    } catch {
+      // ponytail: corrupt recent target can fall back to the first project.
+    }
+    openProject(Object.keys(visibleProjects)[0]);
+  };
+
+  const goHome = () => {
+    setIsHomeScreen(true);
+    setIsAddingData(false);
+    setIsEditingData(false);
+    setHomePath();
+  };
+
+  const renderHomeScreen = () => {
+    const projectEntries = Object.values(visibleProjects);
+    let recent = null;
+    try {
+      recent = JSON.parse(localStorage.getItem(RECENT_KEY) || 'null');
+    } catch {
+      recent = null;
+    }
+    const recentProject = recent && visibleProjects[recent.projectId];
+    const recentDoc = recentProject?.docs?.[recent.pageKey];
+
+    return (
+      <main className="h-full w-full overflow-y-auto px-5 py-8 md:px-10 md:py-10" style={{ color: '#e4decd', zIndex: 10 }}>
+        <div className="mx-auto flex min-h-full w-full max-w-6xl flex-col justify-center gap-8">
+          <header className="border-b pb-5" style={{ borderColor: 'rgba(228,222,205,0.22)' }}>
+            <p className="font-mono-tech text-[10px] font-bold uppercase" style={{ opacity: 0.58 }}>Archivolt Home</p>
+            <div className="mt-2 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+              <div>
+                <h1 className="font-display text-4xl font-bold uppercase leading-none md:text-6xl">Select Archive</h1>
+                <p className="mt-3 max-w-2xl font-mono-tech text-xs uppercase leading-relaxed" style={{ opacity: 0.68 }}>
+                  Choose a project, or continue the last record you opened.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={continueRecent}
+                disabled={!projectEntries.length}
+                className="border px-5 py-3 text-left font-mono-tech text-xs font-bold uppercase transition-colors disabled:cursor-not-allowed disabled:opacity-40"
+                style={{ borderColor: '#e4decd', color: '#e4decd' }}
+              >
+                Continue Recent
+                <span className="mt-1 block max-w-[260px] truncate font-normal" style={{ opacity: 0.62 }}>
+                  {recentDoc ? `${recentProject.name} / ${recentDoc.title}` : 'First available record'}
+                </span>
+              </button>
+            </div>
+          </header>
+
+          <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-3" aria-label="Projects">
+            {projectEntries.map((project, index) => {
+              const keys = orderedPageKeys(project.docs);
+              const firstKey = keys[0];
+              const latestDoc = keys.map((key) => project.docs[key]).sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')))[0] || project.docs[firstKey];
+              const theme = PALETTE[index % PALETTE.length];
+
+              return (
+                <button
+                  key={project.id}
+                  type="button"
+                  onClick={() => openProject(project.id)}
+                  className="group min-h-[176px] border p-5 text-left transition-transform hover:-translate-y-0.5 focus:outline-none focus:ring-2"
+                  style={{
+                    backgroundColor: theme.bgColor,
+                    color: theme.textColor,
+                    borderColor: theme.borderColor
+                  }}
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="font-mono-tech text-[10px] font-bold uppercase" style={{ opacity: 0.58 }}>{project.version}</p>
+                      <h2 className="mt-2 font-serif text-3xl font-bold uppercase leading-none">{project.name}</h2>
+                    </div>
+                    <span className="border px-2 py-1 font-mono-tech text-[10px] font-bold uppercase" style={{ borderColor: theme.textColor }}>
+                      {keys.length} rec
+                    </span>
+                  </div>
+                  <div className="mt-8 border-t pt-4" style={{ borderColor: theme.borderColor }}>
+                    <p className="font-mono-tech text-[10px] font-bold uppercase" style={{ opacity: 0.55 }}>Latest</p>
+                    <p className="mt-1 truncate font-display text-sm font-bold uppercase">{latestDoc?.title || 'Empty project'}</p>
+                  </div>
+                </button>
+              );
+            })}
+          </section>
+        </div>
+      </main>
+    );
+  };
 
   const handleSaveNewData = async (formData) => {
     if (formData.recordType === 'document') {
@@ -827,6 +951,8 @@ export default function App() {
             </button>
           </form>
         </div>
+      ) : hasProjects && isHomeScreen && !shareTarget ? (
+        renderHomeScreen()
       ) : hasProjects && activeProject ? (
         <SidebarLayout
           projects={visibleProjects}
@@ -859,6 +985,7 @@ export default function App() {
           renderContent={renderContent}
           isSharedView={Boolean(shareTarget)}
           createShareLink={createShareLink}
+          goHome={goHome}
         />
       ) : (
         <div className="h-full w-full flex items-center justify-center px-6" style={{ color: '#e4decd', zIndex: 10 }}>
