@@ -4,6 +4,7 @@ import { useFeedback } from './hooks/useFeedback.jsx';
 import { InteractiveInputDemo } from './components/InteractiveInputDemo';
 import { LiveRunner } from './components/LiveRunner';
 import { SidebarLayout } from './layouts/SidebarLayout';
+import { DitheringShader } from './components/ui/dithering-shader';
 import { isSupabaseConfigured } from './lib/supabase';
 import { createDocumentShare, loadDocumentShare, loadRemoteProjects, saveRemoteProjects, uploadImage } from './lib/archiveStore';
 import { checklistItemsFromText } from './utils/checklist';
@@ -437,8 +438,14 @@ export default function App() {
     const recentDoc = recentProject?.docs?.[recent.pageKey];
 
     return (
-      <main className="h-full w-full overflow-y-auto px-5 py-8 md:px-10 md:py-10" style={{ color: '#e4decd', zIndex: 10 }}>
-        <div className="mx-auto flex min-h-full w-full max-w-6xl flex-col justify-center gap-8">
+      <main className="relative h-full w-full overflow-y-auto px-5 py-8 md:px-10 md:py-10" style={{ color: '#e4decd', zIndex: 10 }}>
+        <DitheringShader
+          aria-hidden="true"
+          className="pointer-events-none fixed inset-0 z-0 opacity-45"
+          color="#e4decd"
+          shape="warp"
+        />
+        <div className="relative z-10 mx-auto flex min-h-full w-full max-w-6xl flex-col justify-center gap-8">
           <header className="border-b pb-5" style={{ borderColor: 'rgba(228,222,205,0.22)' }}>
             <p className="font-mono-tech text-[10px] font-bold uppercase" style={{ opacity: 0.58 }}>Archivolt Home</p>
             <div className="mt-2 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
