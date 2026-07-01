@@ -19,8 +19,8 @@ export function InteractiveFolderGallery({
   const [hoverFolder, setHoverFolder] = useState(false);
 
   return (
-    <div className={`relative w-full py-8 md:py-12 ${className}`}>
-      <div className="relative flex min-h-[380px] w-full flex-col items-center justify-start overflow-hidden pt-6 md:min-h-[440px] md:pt-10">
+    <div className={`relative w-full py-20 ${className}`}>
+      <div className="relative flex min-h-[500px] w-full flex-col items-center justify-center overflow-hidden">
         <div className="pointer-events-none relative z-0 flex h-[500px] w-full max-w-[720px] justify-center">
           <motion.div
             className="absolute bottom-6 h-56 w-80 drop-shadow-2xl"
