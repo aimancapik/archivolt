@@ -262,14 +262,15 @@ select:focus-visible,
 
 .section-map-rail {
   position: sticky;
-  top: 50%;
+  top: 88px;
   margin-left: clamp(-76px, -5vw, -52px);
-  height: 0;
-  transform: translateY(-50%);
+  max-height: calc(100vh - 120px);
+  overflow-y: auto;
   z-index: 35;
   display: flex;
   flex-direction: column;
   width: 44px;
+  padding-block: 8px;
 }
 
 .section-map-rail__item {
@@ -483,7 +484,7 @@ select:focus-visible,
 
   .section-map-rail {
     margin-left: 16px;
-    top: 50%;
+    top: 92px;
   }
 
   .section-map-rail__mark:hover::after,
