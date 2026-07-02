@@ -27,6 +27,11 @@ const BACKGROUND_LABELS = {
 
 const BACKGROUND_OPTIONS = BG_OPTIONS.map((value) => ({ value, label: BACKGROUND_LABELS[value] }));
 
+const compactTabTitle = (value = '') => {
+  const title = String(value).trim();
+  return title.length > 34 ? `${title.slice(0, 31).trim()}...` : title;
+};
+
 const blockPreviewText = (block) => {
   if (block.value || block.caption || block.defaultCode) return block.value || block.caption || block.defaultCode;
   if (Array.isArray(block.items)) {
@@ -71,7 +76,7 @@ export const SidebarLayout = ({
   const [commandOpen, setCommandOpen] = useState(false);
   const [activeMapIndex, setActiveMapIndex] = useState(0);
   const [isMapPreviewSuppressed, setIsMapPreviewSuppressed] = useState(false);
-  const [previewMapIndex, setPreviewMapIndex] = useState(null);
+  const [previewMap, setPreviewMap] = useState(null);
   const [showProjectSettings, setShowProjectSettings] = useState(false);
   const [hasDirtyEdit, setHasDirtyEdit] = useState(false);
   const contentRef = useRef(null);
@@ -144,6 +149,15 @@ export const SidebarLayout = ({
     setIsAddingData(false);
     setHasDirtyEdit(false);
     setShowProjectSettings(false);
+  };
+
+  const showMapPreview = (index, target) => {
+    const rect = target.getBoundingClientRect();
+    setPreviewMap({
+      index,
+      left: Math.min(rect.right + 12, window.innerWidth - 340),
+      top: Math.min(Math.max(rect.top - 16, 12), window.innerHeight - 170)
+    });
   };
 
   const mapMarks = useMemo(() => (currentPageData?.content || []).flatMap((block, index) => {
@@ -262,6 +276,7 @@ export const SidebarLayout = ({
               <button
                 key={key}
                 onClick={() => goToPage(key)}
+                title={doc.title}
                 className={`
                   archive-tab
                   flex-none flex flex-col justify-center items-center py-5 px-3 border-2 overflow-hidden
@@ -277,8 +292,8 @@ export const SidebarLayout = ({
                   minHeight: '168px',
                 }}
               >
-                <span className="writing-vertical font-display text-xs md:text-sm font-bold tracking-widest whitespace-normal text-center leading-tight max-h-[136px] [overflow-wrap:anywhere]">
-                  {doc.title}
+                <span className="writing-vertical archive-tab-title font-display text-[10px] font-bold uppercase leading-tight md:text-xs">
+                  {compactTabTitle(doc.title)}
                 </span>
                 {doc.pinned && (
                   <Pin className="absolute bottom-3 left-3 h-3.5 w-3.5 opacity-60" />
@@ -539,16 +554,16 @@ export const SidebarLayout = ({
               // --- RENDER STANDARD DOCUMENTATION ---
               <>
                 {/* Decorative Archive Stamps */}
-                <div className="pointer-events-none absolute top-5 right-5 flex max-w-[34%] flex-col items-end gap-2 opacity-45 md:top-10 md:right-10">
+                <div className="pointer-events-none absolute top-5 right-5 flex max-w-[30%] flex-col items-end gap-2 opacity-45 md:top-10 md:right-10">
                   <div className="barcode" style={{ color: activeTheme.textColor }}></div>
-                  <div className="font-mono-tech text-[9px] text-right uppercase leading-tight">
-                    LOG_1:00:47<br/>
-                    025_RED<br/>
-                    {currentPageData?.subtitle}
+                  <div className="max-w-full font-mono-tech text-[9px] text-right uppercase leading-tight">
+                    <div>LOG_1:00:47</div>
+                    <div>025_RED</div>
+                    <div className="line-clamp-2 [overflow-wrap:anywhere]">{currentPageData?.subtitle}</div>
                   </div>
                 </div>
 
-                <h1 className="font-display mb-6 max-w-full pr-0 text-3xl font-bold uppercase leading-tight md:pr-[35%] md:text-[clamp(2.25rem,5vw,4rem)] [overflow-wrap:anywhere]" style={{ letterSpacing: '-0.03em' }}>
+                <h1 className="font-display mb-6 max-w-full pr-0 text-left text-3xl font-bold uppercase leading-tight md:pr-[35%] md:text-[clamp(2.25rem,5vw,4rem)] [overflow-wrap:anywhere]" style={{ letterSpacing: '-0.03em' }}>
                   {currentPageData?.title}
                 </h1>
 
@@ -557,7 +572,7 @@ export const SidebarLayout = ({
                     className={`section-map-rail ${isMapPreviewSuppressed ? 'is-preview-suppressed' : ''}`}
                     onPointerLeave={() => {
                       setIsMapPreviewSuppressed(false);
-                      setPreviewMapIndex(null);
+                      setPreviewMap(null);
                     }}
                     onPointerMove={() => isMapPreviewSuppressed && setIsMapPreviewSuppressed(false)}
                     aria-label="Record map"
@@ -567,8 +582,8 @@ export const SidebarLayout = ({
                         <div key={mark.id} className="section-map-rail__item">
                           <button
                             type="button"
-                            onPointerEnter={() => setPreviewMapIndex(markIndex)}
-                            onFocus={() => setPreviewMapIndex(markIndex)}
+                            onPointerEnter={(event) => showMapPreview(markIndex, event.currentTarget)}
+                            onFocus={(event) => showMapPreview(markIndex, event.currentTarget)}
                             onPointerDown={() => setIsMapPreviewSuppressed(true)}
                             onClick={(event) => {
                               setIsMapPreviewSuppressed(true);
@@ -582,17 +597,17 @@ export const SidebarLayout = ({
                         </div>
                       ))}
                     </div>
-                    {previewMapIndex !== null && mapMarks[previewMapIndex] && (
+                    {previewMap && mapMarks[previewMap.index] && (
                       <div
                         className="section-map-preview section-map-preview--floating"
                         role="tooltip"
-                        style={{ top: `${Math.min(previewMapIndex * 16 - 14, 330)}px` }}
+                        style={{ left: `${previewMap.left}px`, top: `${previewMap.top}px` }}
                       >
-                        <div className="section-map-preview__title">{mapMarks[previewMapIndex].title}</div>
-                        <div className="section-map-preview__summary">{mapMarks[previewMapIndex].summary}</div>
+                        <div className="section-map-preview__title">{mapMarks[previewMap.index].title}</div>
+                        <div className="section-map-preview__summary">{mapMarks[previewMap.index].summary}</div>
                         <div className="section-map-preview__meta">
-                          <span>{mapMarks[previewMapIndex].type}</span>
-                          <span>{previewMapIndex + 1}/{mapMarks.length}</span>
+                          <span>{mapMarks[previewMap.index].type}</span>
+                          <span>{previewMap.index + 1}/{mapMarks.length}</span>
                         </div>
                       </div>
                     )}

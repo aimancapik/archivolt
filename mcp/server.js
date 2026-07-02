@@ -1,3 +1,4 @@
+import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -82,31 +83,138 @@ const saveProjects = async (supabase, projects) => {
   if (error) throw error;
 };
 
-export const createNote = async ({ supabase, projectId = DEFAULT_PROJECT_ID, title, body, subtitle, overwriteExisting = false }) => {
-  const projects = await loadProjects(supabase);
+const resolveProject = (projects, projectId = DEFAULT_PROJECT_ID) => {
   const project = projects[projectId];
   if (!project) throw new Error(`Project not found: ${projectId}`);
+  return project;
+};
 
+const pageSummary = (pageKey, doc) => [
+  `${pageKey}: ${doc.title || 'Untitled'}`,
+  `  subtitle: ${doc.subtitle || '-'}`,
+  `  pinned: ${Boolean(doc.pinned)}`,
+  `  updated: ${doc.updatedAt || '-'}`
+].join('\n');
+
+const findPageOrThrow = (docs = {}, { pageKey, title } = {}) => {
+  if (pageKey) {
+    if (!docs[pageKey]) throw new Error(`Page not found: ${pageKey}`);
+    return { pageKey, doc: docs[pageKey] };
+  }
+
+  if (!title) throw new Error('Provide pageKey or title');
+  const matchedKey = findBestPageKey(docs, title);
+  if (!matchedKey) throw new Error(`Page not found for title: ${title}`);
+  return { pageKey: matchedKey, doc: docs[matchedKey] };
+};
+
+const blocksToSearchText = (blocks = []) => blocks.map((block) => {
+  if (block.value || block.caption || block.defaultCode) return block.value || block.caption || block.defaultCode;
+  if (Array.isArray(block.items)) {
+    return block.items.map((item) => typeof item === 'string' ? item : item.text || item.value || item.label || '').join(' ');
+  }
+  return '';
+}).filter(Boolean).join('\n');
+
+const blockToMarkdown = (block) => {
+  if (block.type === 'heading') return `## ${block.value || ''}`;
+  if (block.type === 'code') return `\`\`\`${block.language || 'text'}\n${block.value || ''}\n\`\`\``;
+  if (block.type === 'list') return (block.items || []).map((item) => `- ${item}`).join('\n');
+  if (block.type === 'checklist') {
+    return (block.items || []).map((item) => `- [${item.checked ? 'x' : ' '}] ${item.text || ''}`).join('\n');
+  }
+  if (block.type === 'image') return block.caption || block.value || block.url || '';
+  if (block.type === 'playground') return `\`\`\`html\n${block.defaultCode || block.value || ''}\n\`\`\``;
+  return block.value || block.caption || block.defaultCode || '';
+};
+
+const pageToMarkdown = (doc) => [
+  `# ${doc.title || 'Untitled'}`,
+  doc.subtitle ? `\n_${doc.subtitle}_` : '',
+  ...(doc.content || []).map((block) => `\n${blockToMarkdown(block)}`)
+].join('\n').trim();
+
+const formatNoteBody = (body) => {
+  let value = String(body || '').replace(/\r\n?/g, '\n').trim();
+  value = value.replace(/^\s*\[( |x|X)\]\s+/gm, '- [$1] ');
+  value = value.replace(/^```[\t ]*$/gm, '```text');
+  value = value.replace(/\n{3,}/g, '\n\n');
+  if (!/^#{1,6}\s+/m.test(value)) value = `## Summary\n\n${value}`;
+  return value;
+};
+
+const savePage = async ({ supabase, projects, projectId, pageKey, doc }) => {
+  const project = resolveProject(projects, projectId);
+  projects[projectId] = {
+    ...project,
+    docs: {
+      ...(project.docs || {}),
+      [pageKey]: doc
+    }
+  };
+  await saveProjects(supabase, projects);
+};
+
+export const createNote = async ({ supabase, projectId = DEFAULT_PROJECT_ID, title, body, subtitle, overwriteExisting = false }) => {
+  const projects = await loadProjects(supabase);
+  const project = resolveProject(projects, projectId);
   const docs = project.docs || {};
   const existingPageKey = overwriteExisting ? findBestPageKey(docs, title) : null;
   const pageKey = existingPageKey || uniqueKey(docs, title);
   const doc = {
     title: title.toUpperCase(),
     subtitle: subtitle || 'MCP NOTE',
-    content: markdownToBlocks(body),
+    content: markdownToBlocks(formatNoteBody(body)),
     updatedAt: new Date().toISOString()
   };
 
-  projects[projectId] = {
-    ...project,
-    docs: {
-      ...docs,
-      [pageKey]: doc
-    }
+  await savePage({ supabase, projects, projectId, pageKey, doc });
+  return { projectId, pageKey, title: doc.title, action: existingPageKey ? 'updated' : 'created' };
+};
+
+export const updateNote = async ({ supabase, projectId = DEFAULT_PROJECT_ID, pageKey, title, body, subtitle }) => {
+  const projects = await loadProjects(supabase);
+  const project = resolveProject(projects, projectId);
+  const match = findPageOrThrow(project.docs || {}, { pageKey, title });
+  const doc = {
+    ...match.doc,
+    title: (title || match.doc.title || 'Untitled').toUpperCase(),
+    subtitle: subtitle || match.doc.subtitle || 'MCP NOTE',
+    content: markdownToBlocks(formatNoteBody(body)),
+    updatedAt: new Date().toISOString()
   };
 
-  await saveProjects(supabase, projects);
-  return { projectId, pageKey, title: doc.title, action: existingPageKey ? 'updated' : 'created' };
+  await savePage({ supabase, projects, projectId, pageKey: match.pageKey, doc });
+  return { projectId, pageKey: match.pageKey, title: doc.title, action: 'updated' };
+};
+
+export const listPages = async ({ supabase, projectId = DEFAULT_PROJECT_ID }) => {
+  const projects = await loadProjects(supabase);
+  const project = resolveProject(projects, projectId);
+  return Object.entries(project.docs || {}).map(([pageKey, doc]) => pageSummary(pageKey, doc));
+};
+
+export const readPage = async ({ supabase, projectId = DEFAULT_PROJECT_ID, pageKey, title }) => {
+  const projects = await loadProjects(supabase);
+  const project = resolveProject(projects, projectId);
+  const match = findPageOrThrow(project.docs || {}, { pageKey, title });
+  return { ...match, markdown: pageToMarkdown(match.doc) };
+};
+
+export const searchPages = async ({ supabase, projectId, query }) => {
+  const projects = await loadProjects(supabase);
+  const needle = normalizeTitle(query);
+  if (!needle) throw new Error('query is required');
+
+  const projectEntries = projectId
+    ? [[projectId, resolveProject(projects, projectId)]]
+    : Object.entries(projects);
+
+  return projectEntries.flatMap(([id, project]) => Object.entries(project.docs || {}).flatMap(([pageKey, doc]) => {
+    const haystack = normalizeTitle([doc.title, doc.subtitle, blocksToSearchText(doc.content)].filter(Boolean).join(' '));
+    if (!haystack.includes(needle)) return [];
+    return [`${id}/${pageKey}: ${doc.title || 'Untitled'} (${doc.subtitle || '-'})`];
+  }));
 };
 
 const selfCheck = async () => {
@@ -123,12 +231,33 @@ const selfCheck = async () => {
     })
   };
 
-  const result = await createNote({ supabase: fakeSupabase, title: 'My Note', body: '# Hello\n\n- one' });
-  console.assert(result.pageKey === 'my_note', 'creates slug key');
-  console.assert(writes[0].data[DEFAULT_PROJECT_ID].docs.my_note.content.length === 2, 'parses markdown');
+  const created = await createNote({ supabase: fakeSupabase, title: 'My Note', body: 'Hello\n\n- one' });
+  assert.equal(created.pageKey, 'my_note', 'creates slug key');
+  assert.equal(writes[0].data[DEFAULT_PROJECT_ID].docs.my_note.content[0].type, 'heading', 'adds summary heading');
+  assert.equal(writes[0].data[DEFAULT_PROJECT_ID].docs.my_note.content.length, 3, 'parses markdown');
 
-  const updated = await createNote({ supabase: fakeSupabase, title: 'My Note', body: 'Updated', overwriteExisting: true });
-  console.assert(updated.pageKey === 'my_note', 'updates close title match');
+  const pages = await listPages({ supabase: fakeSupabase });
+  assert.match(pages.join('\n'), /my_note: MY NOTE/, 'lists created note');
+
+  const byKey = await readPage({ supabase: fakeSupabase, pageKey: 'my_note' });
+  assert.match(byKey.markdown, /# MY NOTE/, 'reads by key');
+
+  const byTitle = await readPage({ supabase: fakeSupabase, title: 'my note' });
+  assert.equal(byTitle.pageKey, 'my_note', 'reads by title');
+
+  const search = await searchPages({ supabase: fakeSupabase, query: 'hello' });
+  assert.equal(search.length, 1, 'search finds body text');
+
+  const updated = await updateNote({ supabase: fakeSupabase, title: 'My Note', body: 'Updated', subtitle: 'Fresh' });
+  assert.equal(updated.pageKey, 'my_note', 'updates existing note');
+  assert.equal(Object.keys(state[DEFAULT_PROJECT_ID].docs).length, 1, 'does not duplicate update');
+  assert.equal(state[DEFAULT_PROJECT_ID].docs.my_note.subtitle, 'Fresh', 'updates subtitle');
+
+  await assert.rejects(
+    () => updateNote({ supabase: fakeSupabase, title: 'Missing', body: 'Nope' }),
+    /Page not found/,
+    'missing update fails'
+  );
 };
 
 if (process.argv.includes('--self-check')) {
@@ -137,9 +266,9 @@ if (process.argv.includes('--self-check')) {
 }
 
 const server = new McpServer(
-  { name: 'archivolt', version: '0.1.0' },
+  { name: 'archivolt', version: '0.2.0' },
   {
-    instructions: 'When creating Archivolt notes, format body as clean Markdown: use ## headings for sections, short paragraphs for notes, bullets for facts, - [ ] / - [x] for tasks, and fenced code blocks with a language when code is useful. Ask/list projects first if the target project is unclear. Only set overwriteExisting when the user asks to update, replace, overwrite, or refresh an existing note.'
+    instructions: 'When creating Archivolt notes, write clean Markdown optimized for Archivolt blocks: use ## headings, short paragraphs, bullets for facts, - [ ] / - [x] for tasks, and fenced code blocks with a language. Use list_pages/read_page/search_pages before updating when the target is unclear. Only set overwriteExisting when the user asks to update, replace, overwrite, or refresh an existing note.'
   }
 );
 
@@ -152,9 +281,45 @@ server.registerTool('list_projects', {
   return { content: [{ type: 'text', text: text || 'No projects found.' }] };
 });
 
+server.registerTool('list_pages', {
+  title: 'List Archivolt pages',
+  description: 'List pages in an Archivolt project with page keys and metadata.',
+  inputSchema: {
+    projectId: z.string().default(DEFAULT_PROJECT_ID)
+  }
+}, async (input) => {
+  const pages = await listPages({ supabase: getSupabase(), ...input });
+  return { content: [{ type: 'text', text: pages.join('\n') || 'No pages found.' }] };
+});
+
+server.registerTool('read_page', {
+  title: 'Read Archivolt page',
+  description: 'Read an Archivolt page by pageKey or best title match.',
+  inputSchema: {
+    projectId: z.string().default(DEFAULT_PROJECT_ID),
+    pageKey: z.string().optional(),
+    title: z.string().optional()
+  }
+}, async (input) => {
+  const page = await readPage({ supabase: getSupabase(), ...input });
+  return { content: [{ type: 'text', text: `${page.projectId || input.projectId || DEFAULT_PROJECT_ID}/${page.pageKey}\n\n${page.markdown}` }] };
+});
+
+server.registerTool('search_pages', {
+  title: 'Search Archivolt pages',
+  description: 'Search page titles, subtitles, and text-like block content.',
+  inputSchema: {
+    query: z.string().min(1),
+    projectId: z.string().optional()
+  }
+}, async (input) => {
+  const results = await searchPages({ supabase: getSupabase(), ...input });
+  return { content: [{ type: 'text', text: results.join('\n') || 'No matching pages.' }] };
+});
+
 server.registerTool('create_note', {
   title: 'Create Archivolt note',
-  description: 'Create a well-structured Markdown note as an Archivolt page. Use headings, bullets, checklists, and fenced code blocks so Archivolt renders nicer blocks.',
+  description: 'Create a Markdown note as an Archivolt page. The server lightly formats plain notes into Archivolt-friendly blocks.',
   inputSchema: {
     projectId: z.string().default(DEFAULT_PROJECT_ID),
     title: z.string().min(1),
@@ -167,7 +332,27 @@ server.registerTool('create_note', {
   return {
     content: [{
       type: 'text',
-      text: `${result.action === 'updated' ? 'Updated' : 'Created'} ${result.projectId}/${result.pageKey}`
+      text: `${result.action === 'updated' ? 'Updated' : 'Created'} ${result.projectId}/${result.pageKey}\nTitle: ${result.title}`
+    }]
+  };
+});
+
+server.registerTool('update_note', {
+  title: 'Update Archivolt note',
+  description: 'Update an existing Archivolt page by pageKey or title. This never creates a new page.',
+  inputSchema: {
+    projectId: z.string().default(DEFAULT_PROJECT_ID),
+    pageKey: z.string().optional(),
+    title: z.string().optional(),
+    body: z.string().min(1),
+    subtitle: z.string().optional()
+  }
+}, async (input) => {
+  const result = await updateNote({ supabase: getSupabase(), ...input });
+  return {
+    content: [{
+      type: 'text',
+      text: `Updated ${result.projectId}/${result.pageKey}\nTitle: ${result.title}`
     }]
   };
 });
