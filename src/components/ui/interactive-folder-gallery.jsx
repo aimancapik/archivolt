@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
+import { Folder, Image as ImageIcon, X } from 'lucide-react';
 
 const defaultPhotos = [
   { id: 1, image: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=800&auto=format&fit=crop' },
@@ -17,28 +18,37 @@ export function InteractiveFolderGallery({
 }) {
   const [isFolderOpen, setIsFolderOpen] = useState(false);
   const [hoverFolder, setHoverFolder] = useState(false);
+  const photoCount = photos.length;
 
   return (
-    <div className={`relative w-full py-20 ${className}`}>
-      <div className="relative flex min-h-[500px] w-full flex-col items-center justify-center overflow-hidden">
-        <div className="pointer-events-none relative z-0 flex h-[500px] w-full max-w-[720px] justify-center">
+    <div className={`relative w-full ${className}`}>
+      <div className="relative flex min-h-[430px] w-full flex-col items-center justify-center overflow-hidden rounded-lg border border-[#e4e1d8] bg-[#f7f6f3] px-4 py-8 text-[#37352f] shadow-[0_16px_40px_rgba(15,15,15,0.08)]">
+        <div className="absolute inset-x-0 top-0 flex items-center justify-between border-b border-[#e4e1d8] bg-[#fbfaf8]/90 px-4 py-3 text-xs text-[#78746c]">
+          <div className="flex min-w-0 items-center gap-2">
+            <Folder className="h-4 w-4 shrink-0 text-[#a1824a]" aria-hidden="true" />
+            <span className="truncate font-mono-tech">{folderName}</span>
+          </div>
+          <span className="font-mono-tech">{photoCount} assets</span>
+        </div>
+
+        <div className="pointer-events-none relative z-0 mt-10 flex h-[340px] w-full max-w-[740px] justify-center">
           <motion.div
-            className="absolute bottom-6 h-56 w-80 drop-shadow-2xl"
+            className="absolute bottom-8 h-52 w-[320px]"
             animate={{ opacity: isFolderOpen ? 0 : 1, scale: isFolderOpen ? 0.9 : 1 }}
           >
-            <div className="absolute left-0 top-0 h-10 w-32 rounded-t-xl border-l border-r border-t border-white/10 bg-linear-to-t from-[#1e1e1e] to-[#2a2a2a]" />
-            <div className="absolute bottom-0 left-0 right-0 top-8 rounded-b-xl rounded-tr-xl border border-white/10 bg-linear-to-b from-[#1e1e1e] to-[#0a0a0a] shadow-[inset_0_0_40px_rgba(0,0,0,0.8)]" />
-            <div className="pointer-events-none absolute bottom-2 left-2 right-2 top-10 rounded-lg bg-black shadow-inner" />
+            <div className="absolute left-5 top-0 h-10 w-32 rounded-t-md border border-b-0 border-[#d7d2c6] bg-[#ece7dc]" />
+            <div className="absolute inset-x-0 bottom-0 top-8 rounded-md border border-[#d7d2c6] bg-[#f0ece2] shadow-[0_22px_50px_rgba(55,53,47,0.12)]" />
+            <div className="absolute inset-x-4 bottom-4 top-16 rounded border border-[#ded9ce] bg-[#fbfaf8]" />
           </motion.div>
 
-          <div className="absolute bottom-10 z-10 flex justify-center">
+          <div className="absolute bottom-14 z-10 flex justify-center">
             {photos.map((photo, i) => {
               const offset = i - Math.floor(photos.length / 2);
-              const stackY = hoverFolder ? offset * -10 - 40 : offset * -5;
-              const stackX = hoverFolder ? offset * 30 : offset * 3;
-              const stackRotate = hoverFolder ? offset * 8 : offset * 3;
+              const stackY = hoverFolder ? offset * -8 - 34 : offset * -4;
+              const stackX = hoverFolder ? offset * 24 : offset * 3;
+              const stackRotate = hoverFolder ? offset * 5 : offset * 2;
               const stackScale = 1 - Math.abs(offset) * 0.03;
-              const openScale = 1.05;
+              const openScale = 1;
 
               return (
                 <motion.div
@@ -51,7 +61,7 @@ export function InteractiveFolderGallery({
                       setHoverFolder(false);
                     }
                   }}
-                  className={`absolute bottom-0 h-72 w-56 origin-bottom overflow-hidden rounded-xl border border-white/20 shadow-[0_20px_40px_rgba(0,0,0,0.5)] ${isFolderOpen ? 'pointer-events-auto cursor-grab active:cursor-grabbing' : 'pointer-events-none'}`}
+                  className={`absolute bottom-0 h-60 w-44 origin-bottom overflow-hidden rounded-md border border-[#dfdbd1] bg-white p-1.5 shadow-[0_16px_34px_rgba(55,53,47,0.16)] ${isFolderOpen ? 'pointer-events-auto cursor-grab active:cursor-grabbing' : 'pointer-events-none'}`}
                   animate={!isFolderOpen ? {
                     y: stackY,
                     x: stackX,
@@ -59,8 +69,8 @@ export function InteractiveFolderGallery({
                     scale: stackScale,
                     zIndex: i + 10
                   } : {
-                    y: -130,
-                    x: offset * 130,
+                    y: -88,
+                    x: offset * 116,
                     rotate: 0,
                     scale: openScale,
                     zIndex: 50
@@ -69,7 +79,7 @@ export function InteractiveFolderGallery({
                   whileDrag={isFolderOpen ? { scale: openScale + 0.1, rotate: 5, zIndex: 150 } : {}}
                   transition={{ type: 'spring', stiffness: 350, damping: 30 }}
                 >
-                  <img src={photo.image} alt="" className="pointer-events-none h-full w-full object-cover" />
+                  <img src={photo.image} alt="" className="pointer-events-none h-full w-full rounded object-cover" />
                 </motion.div>
               );
             })}
@@ -77,12 +87,12 @@ export function InteractiveFolderGallery({
 
           <motion.button
             type="button"
-            className="pointer-events-auto absolute bottom-0 z-20 h-44 w-[340px] cursor-pointer drop-shadow-[0_-20px_40px_rgba(0,0,0,0.8)]"
+            className="pointer-events-auto absolute bottom-0 z-20 h-40 w-[340px] cursor-pointer"
             style={{ transformOrigin: 'bottom' }}
             animate={{
               opacity: isFolderOpen ? 0 : 1,
-              rotateX: hoverFolder ? -25 : 0,
-              y: hoverFolder ? 10 : 0,
+              rotateX: hoverFolder ? -14 : 0,
+              y: hoverFolder ? 8 : 0,
               pointerEvents: isFolderOpen ? 'none' : 'auto'
             }}
             onMouseEnter={() => setHoverFolder(true)}
@@ -90,18 +100,33 @@ export function InteractiveFolderGallery({
             onClick={() => setIsFolderOpen(true)}
             aria-label="Open gallery folder"
           >
-            <span className="relative flex h-full w-full items-end justify-center overflow-hidden rounded-2xl border border-white/20 bg-linear-to-b from-[#2a2a2a] to-[#111] pb-8 shadow-[inset_0_2px_10px_rgba(255,255,255,0.1)]">
-              <span className="absolute left-0 right-0 top-0 h-px bg-linear-to-r from-transparent via-white/40 to-transparent" />
-              <span className="flex items-center justify-center rounded-lg border border-black/80 bg-black px-5 py-2.5 shadow-inner backdrop-blur-md">
-                <span className="text-sm font-medium tracking-wide text-white/90">{folderName}</span>
+            <span className="relative flex h-full w-full items-end justify-center overflow-hidden rounded-md border border-[#d7d2c6] bg-[#eee9df] pb-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_24px_46px_rgba(55,53,47,0.14)]">
+              <span className="absolute inset-x-5 top-5 h-px bg-[#d8d2c6]" />
+              <span className="flex max-w-[280px] items-center gap-2 rounded border border-[#ded9ce] bg-[#fbfaf8] px-4 py-2 text-left shadow-sm">
+                <ImageIcon className="h-4 w-4 shrink-0 text-[#78746c]" aria-hidden="true" />
+                <span className="truncate text-sm font-medium text-[#37352f]">{folderName}</span>
               </span>
             </span>
           </motion.button>
+
+          {isFolderOpen && (
+            <button
+              type="button"
+              onClick={() => {
+                setIsFolderOpen(false);
+                setHoverFolder(false);
+              }}
+              className="pointer-events-auto absolute right-2 top-2 z-[160] flex h-9 w-9 items-center justify-center rounded border border-[#ded9ce] bg-[#fbfaf8] text-[#78746c] shadow-sm transition hover:bg-white hover:text-[#37352f]"
+              aria-label="Close gallery"
+            >
+              <X className="h-4 w-4" aria-hidden="true" />
+            </button>
+          )}
         </div>
 
         <motion.div
-          animate={{ opacity: isFolderOpen ? 1 : 0, y: isFolderOpen ? 0 : 50 }}
-          className="pointer-events-none absolute bottom-10 rounded-full border border-white/10 bg-white/5 px-6 py-3 font-mono-tech text-sm font-medium uppercase tracking-widest text-white/50 backdrop-blur-md"
+          animate={{ opacity: isFolderOpen ? 1 : 0, y: isFolderOpen ? 0 : 18 }}
+          className="pointer-events-none absolute bottom-5 rounded border border-[#ded9ce] bg-[#fbfaf8] px-4 py-2 font-mono-tech text-[11px] text-[#78746c] shadow-sm"
         >
           {dragHintText}
         </motion.div>
