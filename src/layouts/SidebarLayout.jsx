@@ -29,7 +29,6 @@ const BACKGROUND_OPTIONS = BG_OPTIONS.map((value) => ({ value, label: BACKGROUND
 
 const blockPreviewText = (block) => {
   if (block.value || block.caption || block.defaultCode) return block.value || block.caption || block.defaultCode;
-  if (block.type === 'stickers') return `${block.items?.length || 0} sticker${block.items?.length === 1 ? '' : 's'}`;
   if (Array.isArray(block.items)) {
     return block.items.map((item) => typeof item === 'string' ? item : item.text || item.value || item.label || '').filter(Boolean).join(' ');
   }
@@ -72,6 +71,7 @@ export const SidebarLayout = ({
   const [commandOpen, setCommandOpen] = useState(false);
   const [activeMapIndex, setActiveMapIndex] = useState(0);
   const [isMapPreviewSuppressed, setIsMapPreviewSuppressed] = useState(false);
+  const [previewMapIndex, setPreviewMapIndex] = useState(null);
   const [showProjectSettings, setShowProjectSettings] = useState(false);
   const [hasDirtyEdit, setHasDirtyEdit] = useState(false);
   const contentRef = useRef(null);
@@ -147,13 +147,13 @@ export const SidebarLayout = ({
   };
 
   const mapMarks = useMemo(() => (currentPageData?.content || []).flatMap((block, index) => {
-    if (block.type === 'sticker' || block.type === 'stickers') return [];
+    if (block.type !== 'heading') return [];
     const rawText = blockPreviewText(block);
-    const title = block.type === 'heading' ? rawText : currentPageData?.title || block.type;
+    const title = rawText || currentPageData?.title || 'Section';
     const summary = String(rawText || '').replace(/\s+/g, ' ').trim();
     return [{
       id: `record-map-${activePage}-${index}`,
-      summary: summary || block.type,
+      summary: summary || title,
       title,
       type: block.type
     }];
@@ -539,50 +539,63 @@ export const SidebarLayout = ({
               // --- RENDER STANDARD DOCUMENTATION ---
               <>
                 {/* Decorative Archive Stamps */}
-                <div className="absolute top-6 right-6 md:top-12 md:right-12 flex flex-col items-end gap-2 opacity-60">
+                <div className="pointer-events-none absolute top-5 right-5 flex max-w-[34%] flex-col items-end gap-2 opacity-45 md:top-10 md:right-10">
                   <div className="barcode" style={{ color: activeTheme.textColor }}></div>
-                  <div className="font-mono-tech text-[10px] text-right uppercase">
+                  <div className="font-mono-tech text-[9px] text-right uppercase leading-tight">
                     LOG_1:00:47<br/>
                     025_RED<br/>
                     {currentPageData?.subtitle}
                   </div>
                 </div>
 
-                <h1 className="font-display mb-6 max-w-[70%] text-3xl font-bold uppercase leading-tight md:text-5xl" style={{ letterSpacing: '-0.03em' }}>
+                <h1 className="font-display mb-6 max-w-full pr-0 text-3xl font-bold uppercase leading-tight md:pr-[35%] md:text-[clamp(2.25rem,5vw,4rem)] [overflow-wrap:anywhere]" style={{ letterSpacing: '-0.03em' }}>
                   {currentPageData?.title}
                 </h1>
 
                 {!!mapMarks.length && (
                   <nav
                     className={`section-map-rail ${isMapPreviewSuppressed ? 'is-preview-suppressed' : ''}`}
-                    onPointerLeave={() => setIsMapPreviewSuppressed(false)}
+                    onPointerLeave={() => {
+                      setIsMapPreviewSuppressed(false);
+                      setPreviewMapIndex(null);
+                    }}
                     onPointerMove={() => isMapPreviewSuppressed && setIsMapPreviewSuppressed(false)}
                     aria-label="Record map"
                   >
-                    {mapMarks.map((mark, markIndex) => (
-                      <div key={mark.id} className="section-map-rail__item">
-                        <button
-                          type="button"
-                          onPointerDown={() => setIsMapPreviewSuppressed(true)}
-                          onClick={(event) => {
-                            setIsMapPreviewSuppressed(true);
-                            event.currentTarget.blur();
-                            setActiveMapIndex(markIndex);
-                            document.getElementById(mark.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                          }}
-                          className={`section-map-rail__mark ${mark.type === 'heading' ? 'is-heading' : ''} ${markIndex === activeMapIndex ? 'is-current' : ''}`}
-                          aria-label={`Jump to ${mark.title}`}
-                        />
-                        <div className="section-map-preview" role="tooltip">
-                          <div className="section-map-preview__title">{mark.title}</div>
-                          <div className="section-map-preview__summary">{mark.summary}</div>
-                          <div className="section-map-preview__meta">
-                            <span>{mark.type}</span>
-                            <span>{markIndex + 1}/{mapMarks.length}</span>
-                          </div>
+                    <div className="section-map-rail__list">
+                      {mapMarks.map((mark, markIndex) => (
+                        <div key={mark.id} className="section-map-rail__item">
+                          <button
+                            type="button"
+                            onPointerEnter={() => setPreviewMapIndex(markIndex)}
+                            onFocus={() => setPreviewMapIndex(markIndex)}
+                            onPointerDown={() => setIsMapPreviewSuppressed(true)}
+                            onClick={(event) => {
+                              setIsMapPreviewSuppressed(true);
+                              event.currentTarget.blur();
+                              setActiveMapIndex(markIndex);
+                              document.getElementById(mark.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                            }}
+                            className={`section-map-rail__mark ${markIndex === activeMapIndex ? 'is-current' : ''}`}
+                            aria-label={`Jump to ${mark.title}`}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                    {previewMapIndex !== null && mapMarks[previewMapIndex] && (
+                      <div
+                        className="section-map-preview section-map-preview--floating"
+                        role="tooltip"
+                        style={{ top: `${Math.min(previewMapIndex * 16 - 14, 330)}px` }}
+                      >
+                        <div className="section-map-preview__title">{mapMarks[previewMapIndex].title}</div>
+                        <div className="section-map-preview__summary">{mapMarks[previewMapIndex].summary}</div>
+                        <div className="section-map-preview__meta">
+                          <span>{mapMarks[previewMapIndex].type}</span>
+                          <span>{previewMapIndex + 1}/{mapMarks.length}</span>
                         </div>
                       </div>
-                    ))}
+                    )}
                   </nav>
                 )}
 
