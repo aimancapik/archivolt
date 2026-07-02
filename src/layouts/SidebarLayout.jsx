@@ -75,7 +75,6 @@ export const SidebarLayout = ({
 }) => {
   const [commandOpen, setCommandOpen] = useState(false);
   const [activeMapIndex, setActiveMapIndex] = useState(0);
-  const [isMapPreviewSuppressed, setIsMapPreviewSuppressed] = useState(false);
   const [previewMap, setPreviewMap] = useState(null);
   const [showProjectSettings, setShowProjectSettings] = useState(false);
   const [hasDirtyEdit, setHasDirtyEdit] = useState(false);
@@ -563,18 +562,19 @@ export const SidebarLayout = ({
                   </div>
                 </div>
 
-                <h1 className="font-display mb-6 max-w-full pr-0 text-left text-3xl font-bold uppercase leading-tight md:pr-[35%] md:text-[clamp(2.25rem,5vw,4rem)] [overflow-wrap:anywhere]" style={{ letterSpacing: '-0.03em' }}>
-                  {currentPageData?.title}
-                </h1>
+                <header className="archive-page-header">
+                  <p className="archive-page-kicker">{activeProject.name} / {currentPageData?.subtitle || 'Record'}</p>
+                  <h1 className="archive-page-title">
+                    {currentPageData?.title}
+                  </h1>
+                </header>
 
                 {!!mapMarks.length && (
                   <nav
-                    className={`section-map-rail ${isMapPreviewSuppressed ? 'is-preview-suppressed' : ''}`}
+                    className="section-map-rail"
                     onPointerLeave={() => {
-                      setIsMapPreviewSuppressed(false);
                       setPreviewMap(null);
                     }}
-                    onPointerMove={() => isMapPreviewSuppressed && setIsMapPreviewSuppressed(false)}
                     aria-label="Record map"
                   >
                     <div className="section-map-rail__list">
@@ -584,10 +584,7 @@ export const SidebarLayout = ({
                             type="button"
                             onPointerEnter={(event) => showMapPreview(markIndex, event.currentTarget)}
                             onFocus={(event) => showMapPreview(markIndex, event.currentTarget)}
-                            onPointerDown={() => setIsMapPreviewSuppressed(true)}
-                            onClick={(event) => {
-                              setIsMapPreviewSuppressed(true);
-                              event.currentTarget.blur();
+                            onClick={() => {
                               setActiveMapIndex(markIndex);
                               document.getElementById(mark.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
                             }}

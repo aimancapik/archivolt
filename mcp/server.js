@@ -37,6 +37,13 @@ const uniqueKey = (docs, title) => {
   return key;
 };
 
+const uniqueProjectId = (projects, name) => {
+  const base = slugify(name).replaceAll('_', '-');
+  let projectId = base;
+  for (let i = 2; projects[projectId]; i += 1) projectId = `${base}-${i}`;
+  return projectId;
+};
+
 const findBestPageKey = (docs, title) => {
   const slug = slugify(title);
   if (docs[slug]) return slug;
@@ -155,6 +162,38 @@ const savePage = async ({ supabase, projects, projectId, pageKey, doc }) => {
   await saveProjects(supabase, projects);
 };
 
+export const createProject = async ({
+  supabase,
+  name,
+  projectId,
+  version = 'v1.0.0',
+  pageTitle = 'Index',
+  body = 'New project workspace.',
+  subtitle = 'MCP PROJECT',
+  overwriteExisting = false
+}) => {
+  const projects = await loadProjects(supabase);
+  const id = projectId || uniqueProjectId(projects, name);
+  if (projects[id] && !overwriteExisting) throw new Error(`Project already exists: ${id}`);
+
+  projects[id] = {
+    id,
+    name: String(name || id).toUpperCase(),
+    version,
+    docs: {
+      index: {
+        title: pageTitle.toUpperCase(),
+        subtitle,
+        content: markdownToBlocks(formatNoteBody(body)),
+        updatedAt: new Date().toISOString()
+      }
+    }
+  };
+
+  await saveProjects(supabase, projects);
+  return { projectId: id, name: projects[id].name, pageKey: 'index', action: projects[id] ? 'created' : 'created' };
+};
+
 export const createNote = async ({ supabase, projectId = DEFAULT_PROJECT_ID, title, body, subtitle, overwriteExisting = false }) => {
   const projects = await loadProjects(supabase);
   const project = resolveProject(projects, projectId);
@@ -248,6 +287,11 @@ const selfCheck = async () => {
   const search = await searchPages({ supabase: fakeSupabase, query: 'hello' });
   assert.equal(search.length, 1, 'search finds body text');
 
+  const project = await createProject({ supabase: fakeSupabase, name: 'Client Notes', body: 'Kickoff notes' });
+  assert.equal(project.projectId, 'client-notes', 'creates project slug');
+  assert.equal(state['client-notes'].docs.index.title, 'INDEX', 'creates index page');
+  assert.equal((await listPages({ supabase: fakeSupabase, projectId: 'client-notes' })).length, 1, 'lists new project pages');
+
   const updated = await updateNote({ supabase: fakeSupabase, title: 'My Note', body: 'Updated', subtitle: 'Fresh' });
   assert.equal(updated.pageKey, 'my_note', 'updates existing note');
   assert.equal(Object.keys(state[DEFAULT_PROJECT_ID].docs).length, 1, 'does not duplicate update');
@@ -279,6 +323,28 @@ server.registerTool('list_projects', {
   const projects = await loadProjects(getSupabase());
   const text = Object.values(projects).map((project) => `${project.id}: ${project.name}`).join('\n');
   return { content: [{ type: 'text', text: text || 'No projects found.' }] };
+});
+
+server.registerTool('create_project', {
+  title: 'Create Archivolt project',
+  description: 'Create a new Archivolt project with an initial index page.',
+  inputSchema: {
+    name: z.string().min(1),
+    projectId: z.string().optional(),
+    version: z.string().default('v1.0.0'),
+    pageTitle: z.string().default('Index'),
+    body: z.string().default('New project workspace.'),
+    subtitle: z.string().default('MCP PROJECT'),
+    overwriteExisting: z.boolean().default(false)
+  }
+}, async (input) => {
+  const result = await createProject({ supabase: getSupabase(), ...input });
+  return {
+    content: [{
+      type: 'text',
+      text: `Created project ${result.projectId}\nName: ${result.name}\nFirst page: ${result.pageKey}`
+    }]
+  };
 });
 
 server.registerTool('list_pages', {
