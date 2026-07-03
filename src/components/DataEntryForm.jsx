@@ -201,30 +201,33 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
     return (block.value || block.type).replace(/\s+/g, ' ').slice(0, 42);
   };
 
+  const addBlockGroupBreaks = new Set(['playground', 'checklist']);
   const renderAddBlockButtons = (buttonClassName = '') => insertButtons.map(([type, Icon, label, isUnavailable]) => {
     const tooltip = isUnavailable ? 'Sticker block already exists' : `Add ${label.toLowerCase()}`;
 
     return (
-      <button
-        key={type}
-        type="button"
-        onClick={() => {
-          if (isUnavailable) {
-            setIsPreviewing(false);
-            notify('Sticker block already exists');
-            return;
-          }
-          addBlock(type);
-        }}
-        className={cn("editor-add-button grid h-9 w-9 shrink-0 place-items-center border cursor-pointer transition-colors hover:bg-[rgba(255,255,255,0.05)]", buttonClassName)}
-        style={{ borderColor: theme.borderColor, color: theme.textColor, borderRadius: '4px', background: 'transparent', opacity: isUnavailable ? 0.45 : 1 }}
-        title={tooltip}
-        aria-label={tooltip}
-        aria-disabled={isUnavailable}
-        data-tooltip={tooltip}
-      >
-        <Icon className="w-4 h-4" />
-      </button>
+      <React.Fragment key={type}>
+        <button
+          type="button"
+          onClick={() => {
+            if (isUnavailable) {
+              setIsPreviewing(false);
+              notify('Sticker block already exists');
+              return;
+            }
+            addBlock(type);
+          }}
+          className={cn("editor-add-button grid h-9 w-9 shrink-0 place-items-center border cursor-pointer transition-colors hover:bg-[rgba(255,255,255,0.05)]", buttonClassName)}
+          style={{ borderColor: theme.borderColor, color: theme.textColor, borderRadius: '4px', background: 'transparent', opacity: isUnavailable ? 0.45 : 1 }}
+          title={tooltip}
+          aria-label={tooltip}
+          aria-disabled={isUnavailable}
+          data-tooltip={tooltip}
+        >
+          <Icon className="w-4 h-4" />
+        </button>
+        {addBlockGroupBreaks.has(type) && <span className="editor-add-divider" aria-hidden="true" />}
+      </React.Fragment>
     );
   });
 
@@ -627,7 +630,7 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
             </div>
             <div className="editor-toolbar-add flex items-center gap-2">
               <span className="shrink-0 font-mono-tech text-[9px] uppercase opacity-50">ADD</span>
-              <div className="flex min-w-0 flex-1 gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+              <div className="editor-add-tray">
                 {renderAddBlockButtons()}
               </div>
             </div>
@@ -640,7 +643,9 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
               style={{ borderColor: theme.borderColor, background: theme.bgColor }}
             >
               <span className="font-mono-tech text-[9px] uppercase opacity-50">ADD</span>
-              {renderAddBlockButtons('editor-add-rail__button')}
+              <div className="editor-add-tray editor-add-tray--rail">
+                {renderAddBlockButtons('editor-add-rail__button')}
+              </div>
             </aside>
             <div className={`editor-workspace__edit ${isPreviewing ? 'is-hidden-mobile' : ''}`}>
               <div className="block-editor-list">

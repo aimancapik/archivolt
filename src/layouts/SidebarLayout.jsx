@@ -72,6 +72,7 @@ export const SidebarLayout = ({
   const scrollToTop = () => contentRef.current?.scrollTo(0, 0);
   const selectedBackgroundPattern = BG_OPTIONS.includes(backgroundPattern) ? backgroundPattern : 'dots';
   const activeBackgroundPattern = selectedBackgroundPattern;
+  const isEditorOpen = !isSharedView && (isAddingData || isEditingData);
 
   const confirmDiscardEdit = async () => {
     if (!isEditingData || !hasDirtyEdit) return true;
@@ -425,7 +426,7 @@ export const SidebarLayout = ({
           )}
 
           {/* Inner Content Area */}
-          <div className="archive-inner p-6 md:p-12 lg:p-20 max-w-4xl mx-auto relative min-h-full">
+          <div className={`archive-inner relative mx-auto min-h-full ${isEditorOpen ? 'max-w-7xl p-6 md:p-10 lg:p-12' : 'max-w-4xl p-6 md:p-12 lg:p-20'}`}>
             {activeBackgroundPattern === 'beams' ? (
               <BeamsBackground
                 aria-hidden="true"
@@ -453,7 +454,7 @@ export const SidebarLayout = ({
               />
             )}
             
-            {!isSharedView && (isAddingData || isEditingData) ? (
+            {isEditorOpen ? (
               // --- RENDER THE NEW DATA ENTRY FORM ---
               <DataEntryForm 
                 key={`${isEditingData ? 'edit' : 'create'}-${activeProjectId}-${activePage}`}
