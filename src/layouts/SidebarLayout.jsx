@@ -1,11 +1,11 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Plus, ArrowLeft, ArrowRight, ChevronDown, Edit3, Trash2, Settings, Pin, Search, Share2, Home } from 'lucide-react';
 import { BGPattern } from '../components/ui/bg-pattern';
 import { BeamsBackground } from '../components/ui/beams-background';
 import { DitheringShader } from '../components/ui/dithering-shader';
+import { Dock, DockIcon, DockItem, DockLabel } from '../components/ui/dock';
 import { CommandPalette } from '../components/CommandPalette';
 import { DataEntryForm } from '../components/DataEntryForm';
-import { documentHeadings } from '../utils/documentStructure';
 import { STICKER_STAGE_HEIGHT } from '../utils/stickerPlacement';
 
 const BG_PATTERN_VARIANTS = ['grid', 'dots', 'horizontal-lines', 'vertical-lines', 'checkerboard'];
@@ -30,14 +30,6 @@ const BACKGROUND_OPTIONS = BG_OPTIONS.map((value) => ({ value, label: BACKGROUND
 const compactTabTitle = (value = '') => {
   const title = String(value).trim();
   return title.length > 34 ? `${title.slice(0, 31).trim()}...` : title;
-};
-
-const blockPreviewText = (block) => {
-  if (block.value || block.caption || block.defaultCode) return block.value || block.caption || block.defaultCode;
-  if (Array.isArray(block.items)) {
-    return block.items.map((item) => typeof item === 'string' ? item : item.text || item.value || item.label || '').filter(Boolean).join(' ');
-  }
-  return block.type;
 };
 
 export const SidebarLayout = ({
@@ -74,8 +66,6 @@ export const SidebarLayout = ({
   goHome
 }) => {
   const [commandOpen, setCommandOpen] = useState(false);
-  const [activeMapIndex, setActiveMapIndex] = useState(0);
-  const [previewMap, setPreviewMap] = useState(null);
   const [showProjectSettings, setShowProjectSettings] = useState(false);
   const [hasDirtyEdit, setHasDirtyEdit] = useState(false);
   const contentRef = useRef(null);
@@ -150,28 +140,6 @@ export const SidebarLayout = ({
     setShowProjectSettings(false);
   };
 
-  const showMapPreview = (index, target) => {
-    const rect = target.getBoundingClientRect();
-    setPreviewMap({
-      index,
-      left: Math.min(rect.right + 12, window.innerWidth - 340),
-      top: Math.min(Math.max(rect.top - 16, 12), window.innerHeight - 170)
-    });
-  };
-
-  const mapMarks = useMemo(() => (currentPageData?.content || []).flatMap((block, index) => {
-    if (block.type !== 'heading') return [];
-    const rawText = blockPreviewText(block);
-    const title = rawText || currentPageData?.title || 'Section';
-    const summary = String(rawText || '').replace(/\s+/g, ' ').trim();
-    return [{
-      id: `record-map-${activePage}-${index}`,
-      summary: summary || title,
-      title,
-      type: block.type
-    }];
-  }), [activePage, currentPageData?.content, currentPageData?.title]);
-
   const commands = (() => {
     const items = [
       { id: 'new-record', label: 'New record', meta: 'Create document or project', type: 'ACTION', keywords: 'create add commit', run: startNewRecord },
@@ -190,21 +158,66 @@ export const SidebarLayout = ({
           keywords: `${project.name} ${pageKey} ${doc.subtitle} ${(doc.content || []).map((block) => block.value || '').join(' ')}`,
           run: () => goToProjectPage(projectId, pageKey)
         });
-        documentHeadings(doc.content, pageKey).forEach((heading) => {
-          items.push({
-            id: `heading-${projectId}-${pageKey}-${heading.id}`,
-            label: heading.title,
-            meta: `${doc.title} / ${project.name}`,
-            type: 'SECTION',
-            keywords: `${project.name} ${doc.title} ${doc.subtitle}`,
-            run: () => goToProjectPage(projectId, pageKey, heading.id)
-          });
-        });
       });
     });
 
     return items;
   })();
+
+  const toolbarActions = [
+    {
+      key: 'home',
+      label: 'Home',
+      ariaLabel: 'Go to home',
+      icon: Home,
+      run: goHome
+    },
+    {
+      key: 'search',
+      label: 'Command Palette',
+      ariaLabel: 'Open command palette',
+      icon: Search,
+      run: () => setCommandOpen(true)
+    },
+    {
+      key: 'new',
+      label: 'New Directory',
+      icon: Plus,
+      run: startNewRecord,
+      active: isAddingData,
+      iconStyle: { transform: isAddingData ? 'rotate(45deg)' : 'none' }
+    },
+    ...(!isAddingData ? [
+      {
+        key: 'share',
+        label: 'Copy Share Link',
+        ariaLabel: 'Copy share link',
+        icon: Share2,
+        run: copyShareLink
+      },
+      {
+        key: 'pin',
+        label: currentPageData?.pinned ? 'Unpin Document' : 'Pin Document',
+        icon: Pin,
+        run: handleTogglePinDocument,
+        active: Boolean(currentPageData?.pinned)
+      },
+      {
+        key: 'edit',
+        label: isEditingData ? 'View Document' : 'Edit Document',
+        icon: Edit3,
+        run: startEditRecord,
+        active: isEditingData
+      },
+      {
+        key: 'settings',
+        label: 'Project Settings',
+        icon: Settings,
+        run: () => setShowProjectSettings(!showProjectSettings),
+        active: showProjectSettings
+      }
+    ] : [])
+  ];
 
   useEffect(() => {
     const onKeyDown = (event) => {
@@ -216,40 +229,6 @@ export const SidebarLayout = ({
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
-
-  useEffect(() => {
-    if (isAddingData || isEditingData || !mapMarks.length) {
-      setActiveMapIndex(0);
-      return;
-    }
-
-    const scrollRoot = contentRef.current;
-    if (!scrollRoot) return;
-
-    const syncActiveMap = () => {
-      const rootRect = scrollRoot.getBoundingClientRect();
-      const targetTop = rootRect.top + rootRect.height / 2;
-      let nextIndex = 0;
-
-      mapMarks.forEach((mark, index) => {
-        const markerTarget = document.getElementById(mark.id);
-        if (markerTarget && markerTarget.getBoundingClientRect().top <= targetTop) {
-          nextIndex = index;
-        }
-      });
-
-      setActiveMapIndex((currentIndex) => currentIndex === nextIndex ? currentIndex : nextIndex);
-    };
-
-    syncActiveMap();
-    scrollRoot.addEventListener('scroll', syncActiveMap, { passive: true });
-    window.addEventListener('resize', syncActiveMap);
-
-    return () => {
-      scrollRoot.removeEventListener('scroll', syncActiveMap);
-      window.removeEventListener('resize', syncActiveMap);
-    };
-  }, [isAddingData, isEditingData, mapMarks]);
 
   return (
     <div className="h-full w-full flex justify-center items-center px-2 md:px-6 lg:px-10 animate-fade-in" style={{ zIndex: 10 }}>
@@ -354,92 +333,41 @@ export const SidebarLayout = ({
               <span className="font-mono-tech text-xs opacity-50 hidden md:block">_{activeProject.version}</span>
             </div>
 
-            {!isSharedView && <div className="flex items-center gap-4">
-              <button
-                onClick={goHome}
-                className="p-2 border-2 transition-colors cursor-pointer"
-                style={{ borderColor: activeTheme.textColor, color: activeTheme.textColor }}
-                title="Home"
-                aria-label="Go to home"
+            {!isSharedView && (
+              <Dock
+                className="archive-action-dock"
+                distance={110}
+                expandOnHover={false}
+                magnification={58}
+                panelHeight={44}
               >
-                <Home className="w-5 h-5" />
-              </button>
-              <button
-                onClick={() => setCommandOpen(true)}
-                className="p-2 border-2 transition-colors cursor-pointer"
-                style={{ borderColor: activeTheme.textColor, color: activeTheme.textColor }}
-                title="Command Palette"
-                aria-label="Open command palette"
-              >
-                <Search className="w-5 h-5" />
-              </button>
-              <button 
-                onClick={startNewRecord}
-                className="p-2 border-2 transition-colors cursor-pointer" 
-                style={{
-                  borderColor: activeTheme.textColor,
-                  backgroundColor: isAddingData ? activeTheme.textColor : 'transparent',
-                  color: isAddingData ? activeTheme.bgColor : activeTheme.textColor,
-                }}
-                title="New Directory"
-              >
-                <Plus className="w-5 h-5 transition-transform" style={{ transform: isAddingData ? 'rotate(45deg)' : 'none' }} />
-              </button>
-              {!isAddingData && (
-                <>
-                  <button
-                    onClick={copyShareLink}
-                    className="p-2 border-2 transition-colors cursor-pointer"
+                {toolbarActions.map(({ key, label, ariaLabel, icon: Icon, run, active, iconStyle }) => (
+                  <DockItem
+                    key={key}
+                    onClick={run}
+                    title={label}
+                    ariaLabel={ariaLabel || label}
+                    ariaPressed={typeof active === 'boolean' ? active : undefined}
+                    className="archive-action-dock__item"
                     style={{
                       borderColor: activeTheme.textColor,
-                      color: activeTheme.textColor,
+                      backgroundColor: active ? activeTheme.textColor : 'transparent',
+                      color: active ? activeTheme.bgColor : activeTheme.textColor,
                     }}
-                    title="Copy Share Link"
-                    aria-label="Copy share link"
                   >
-                    <Share2 className="w-5 h-5" />
-                  </button>
-                  <button
-                    onClick={handleTogglePinDocument}
-                    className="p-2 border-2 transition-colors cursor-pointer"
-                    style={{
-                      borderColor: activeTheme.textColor,
-                      backgroundColor: currentPageData?.pinned ? activeTheme.textColor : 'transparent',
-                      color: currentPageData?.pinned ? activeTheme.bgColor : activeTheme.textColor,
-                    }}
-                    title={currentPageData?.pinned ? 'Unpin Document' : 'Pin Document'}
-                    aria-pressed={Boolean(currentPageData?.pinned)}
-                  >
-                    <Pin className="w-5 h-5" />
-                  </button>
-                  <button
-                    onClick={startEditRecord}
-                    className="p-2 border-2 transition-colors cursor-pointer"
-                    style={{
-                      borderColor: activeTheme.textColor,
-                      backgroundColor: isEditingData ? activeTheme.textColor : 'transparent',
-                      color: isEditingData ? activeTheme.bgColor : activeTheme.textColor,
-                    }}
-                    title={isEditingData ? 'View Document' : 'Edit Document'}
-                    aria-pressed={isEditingData}
-                  >
-                    <Edit3 className="w-5 h-5" />
-                  </button>
-                  <button
-                    onClick={() => setShowProjectSettings(!showProjectSettings)}
-                    className="p-2 border-2 transition-colors cursor-pointer"
-                    style={{
-                      borderColor: activeTheme.textColor,
-                      backgroundColor: showProjectSettings ? activeTheme.textColor : 'transparent',
-                      color: showProjectSettings ? activeTheme.bgColor : activeTheme.textColor,
-                    }}
-                    title="Project Settings"
-                  >
-                    <Settings className="w-5 h-5" />
-                  </button>
-                </>
-              )}
-            </div>}
+                    <DockLabel
+                      className="archive-action-dock__label"
+                      style={{ borderColor: activeTheme.borderColor, background: activeTheme.bgColor, color: activeTheme.textColor }}
+                    >
+                      {label}
+                    </DockLabel>
+                    <DockIcon>
+                      <Icon className="h-full w-full transition-transform" style={iconStyle} />
+                    </DockIcon>
+                  </DockItem>
+                ))}
+              </Dock>
+            )}
           </div>
 
           {!isSharedView && showProjectSettings && (
@@ -568,48 +496,6 @@ export const SidebarLayout = ({
                     {currentPageData?.title}
                   </h1>
                 </header>
-
-                {!!mapMarks.length && (
-                  <nav
-                    className="section-map-rail"
-                    onPointerLeave={() => {
-                      setPreviewMap(null);
-                    }}
-                    aria-label="Record map"
-                  >
-                    <div className="section-map-rail__list">
-                      {mapMarks.map((mark, markIndex) => (
-                        <div key={mark.id} className="section-map-rail__item">
-                          <button
-                            type="button"
-                            onPointerEnter={(event) => showMapPreview(markIndex, event.currentTarget)}
-                            onFocus={(event) => showMapPreview(markIndex, event.currentTarget)}
-                            onClick={() => {
-                              setActiveMapIndex(markIndex);
-                              document.getElementById(mark.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                            }}
-                            className={`section-map-rail__mark ${markIndex === activeMapIndex ? 'is-current' : ''}`}
-                            aria-label={`Jump to ${mark.title}`}
-                          />
-                        </div>
-                      ))}
-                    </div>
-                    {previewMap && mapMarks[previewMap.index] && (
-                      <div
-                        className="section-map-preview section-map-preview--floating"
-                        role="tooltip"
-                        style={{ left: `${previewMap.left}px`, top: `${previewMap.top}px` }}
-                      >
-                        <div className="section-map-preview__title">{mapMarks[previewMap.index].title}</div>
-                        <div className="section-map-preview__summary">{mapMarks[previewMap.index].summary}</div>
-                        <div className="section-map-preview__meta">
-                          <span>{mapMarks[previewMap.index].type}</span>
-                          <span>{previewMap.index + 1}/{mapMarks.length}</span>
-                        </div>
-                      </div>
-                    )}
-                  </nav>
-                )}
 
                 {/* Page Content */}
                 <div className="mt-12 md:mt-0 relative z-10 animate-fade-in" style={{ minHeight: STICKER_STAGE_HEIGHT }}>

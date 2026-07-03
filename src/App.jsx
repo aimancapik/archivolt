@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { CodeBlock } from './components/CodeBlock';
+import { BlackboardBlock } from './components/BlackboardBlock';
 import { useFeedback } from './hooks/useFeedback.jsx';
 import { InteractiveInputDemo } from './components/InteractiveInputDemo';
 import { LiveRunner } from './components/LiveRunner';
@@ -168,6 +169,23 @@ const initialProjectsData = {
           ]}
         ]
       },
+      blackboard: {
+        title: "BLACKBOARD",
+        subtitle: "CODE_003B // GRAPH",
+        content: [
+          { type: 'heading', value: "AUTO DETECT BOARD" },
+          { type: 'text', value: "This block lets AI output land on a single board surface. Paste graph JSON, chart JSON, Mermaid, or plain notes and the renderer chooses the closest view." },
+          {
+            type: 'blackboard',
+            value: '{\n  "title": "AI output flow",\n  "nodes": [\n    { "id": "prompt", "label": "Prompt" },\n    { "id": "model", "label": "Model" },\n    { "id": "board", "label": "Board" },\n    { "id": "user", "label": "User" }\n  ],\n  "edges": [\n    { "from": "prompt", "to": "model", "label": "input" },\n    { "from": "model", "to": "board", "label": "graph data" },\n    { "from": "board", "to": "user", "label": "visual" }\n  ]\n}'
+          },
+          { type: 'heading', value: "CHART SHAPE" },
+          {
+            type: 'blackboard',
+            value: '{\n  "title": "Signal strength",\n  "type": "bar",\n  "labels": ["Mon", "Tue", "Wed", "Thu"],\n  "values": [12, 18, 10, 22]\n}'
+          }
+        ]
+      },
       playground: {
         title: "SIGNAL TEST",
         subtitle: "CODE_004 // LIVE",
@@ -242,9 +260,25 @@ const initialProjectsData = {
   }
 };
 
+const mergeProjectDocs = (project = {}, defaults = {}) => ({
+  ...defaults,
+  ...project,
+  docs: {
+    ...(defaults.docs || {}),
+    ...(project.docs || {})
+  }
+});
+
+const mergeInitialProjects = (projects = {}) => ({
+  ...initialProjectsData,
+  ...projects,
+  'nexus-ui': mergeProjectDocs(projects['nexus-ui'], initialProjectsData['nexus-ui']),
+  'project-nova': mergeProjectDocs(projects['project-nova'], initialProjectsData['project-nova'])
+});
+
 const loadProjects = () => {
   try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY)) || initialProjectsData;
+    return mergeInitialProjects(JSON.parse(localStorage.getItem(STORAGE_KEY)) || initialProjectsData);
   } catch {
     return initialProjectsData;
   }
@@ -317,7 +351,7 @@ export default function App() {
 
     loadRemoteProjects()
       .then((remoteProjects) => {
-        if (remoteProjects) setProjects(remoteProjects);
+        if (remoteProjects) setProjects(mergeInitialProjects(remoteProjects));
         else return saveRemoteProjects(initialProjectsRef.current);
       })
       .catch((error) => console.warn('Supabase load failed:', error.message))
@@ -845,6 +879,8 @@ export default function App() {
         return <h2 id={headingDomId(activePage, index, block.value)} key={index} className="font-serif font-bold mt-8 mb-3 pb-1.5 inline-block scroll-mt-28" style={{ fontSize: 'clamp(1.35rem, 2.4vw, 1.85rem)', borderBottom: '2px solid currentColor' }}>{block.value}</h2>;
       case 'code':
         return <CodeBlock key={index} language={block.language} code={block.value} />;
+      case 'blackboard':
+        return <BlackboardBlock key={index} value={block.value} />;
       case 'demo-input':
         return <InteractiveInputDemo key={index} />;
       case 'image':

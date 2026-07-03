@@ -7,10 +7,20 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 import { markdownToBlocks } from '../src/utils/markdownToBlocks.js';
+import { detectBlackboardPayload } from '../src/utils/blackboard.js';
 
 const SERVER_DIR = dirname(fileURLToPath(import.meta.url));
 const STATE_ID = 'main';
 const DEFAULT_PROJECT_ID = 'nexus-ui';
+const MCP_INSTRUCTIONS = [
+  'When creating Archivolt notes, write clean Markdown optimized for Archivolt blocks.',
+  'For normal notes, include what matters so the note is useful later: a short summary, the main facts or findings, important files/functions/components when relevant, key inputs/outputs or behavior, and concrete next actions when they exist.',
+  'Use ## headings for sections, short paragraphs for context, bullets for facts/findings, - [ ] / - [x] for action items, and fenced code blocks with a language for commands or code.',
+  'Keep notes practical and internal-facing. Skip filler intros and closing commentary.',
+  'When the user wants a board, graph, workflow, or chart, return only Mermaid, graph JSON, chart JSON, or plain board text so Archivolt can store it as a blackboard block.',
+  'Use list_pages/read_page/search_pages before updating when the target is unclear.',
+  'Only set overwriteExisting when the user asks to update, replace, overwrite, or refresh an existing note.'
+].join(' ');
 
 const loadEnv = () => {
   try {
@@ -150,6 +160,13 @@ const formatNoteBody = (body) => {
   return value;
 };
 
+const noteContentFromBody = (body) => {
+  const value = String(body || '').trim();
+  const payload = detectBlackboardPayload(value);
+  if (payload.kind !== 'text') return [{ type: 'blackboard', value }];
+  return markdownToBlocks(formatNoteBody(body));
+};
+
 const savePage = async ({ supabase, projects, projectId, pageKey, doc }) => {
   const project = resolveProject(projects, projectId);
   projects[projectId] = {
@@ -184,7 +201,7 @@ export const createProject = async ({
       index: {
         title: pageTitle.toUpperCase(),
         subtitle,
-        content: markdownToBlocks(formatNoteBody(body)),
+        content: noteContentFromBody(body),
         updatedAt: new Date().toISOString()
       }
     }
@@ -203,7 +220,7 @@ export const createNote = async ({ supabase, projectId = DEFAULT_PROJECT_ID, tit
   const doc = {
     title: title.toUpperCase(),
     subtitle: subtitle || 'MCP NOTE',
-    content: markdownToBlocks(formatNoteBody(body)),
+    content: noteContentFromBody(body),
     updatedAt: new Date().toISOString()
   };
 
@@ -219,7 +236,7 @@ export const updateNote = async ({ supabase, projectId = DEFAULT_PROJECT_ID, pag
     ...match.doc,
     title: (title || match.doc.title || 'Untitled').toUpperCase(),
     subtitle: subtitle || match.doc.subtitle || 'MCP NOTE',
-    content: markdownToBlocks(formatNoteBody(body)),
+    content: noteContentFromBody(body),
     updatedAt: new Date().toISOString()
   };
 
@@ -297,6 +314,14 @@ const selfCheck = async () => {
   assert.equal(Object.keys(state[DEFAULT_PROJECT_ID].docs).length, 1, 'does not duplicate update');
   assert.equal(state[DEFAULT_PROJECT_ID].docs.my_note.subtitle, 'Fresh', 'updates subtitle');
 
+  const board = await createNote({
+    supabase: fakeSupabase,
+    title: 'Flow Board',
+    body: '{"title":"Flow","nodes":[{"id":"a","label":"Input"},{"id":"b","label":"Board"}],"edges":[{"from":"a","to":"b","label":"path"}]}'
+  });
+  assert.equal(board.pageKey, 'flow_board', 'creates board note');
+  assert.equal(state[DEFAULT_PROJECT_ID].docs.flow_board.content[0].type, 'blackboard', 'stores graph payload as blackboard block');
+
   await assert.rejects(
     () => updateNote({ supabase: fakeSupabase, title: 'Missing', body: 'Nope' }),
     /Page not found/,
@@ -312,7 +337,7 @@ if (process.argv.includes('--self-check')) {
 const server = new McpServer(
   { name: 'archivolt', version: '0.2.0' },
   {
-    instructions: 'When creating Archivolt notes, write clean Markdown optimized for Archivolt blocks: use ## headings, short paragraphs, bullets for facts, - [ ] / - [x] for tasks, and fenced code blocks with a language. Use list_pages/read_page/search_pages before updating when the target is unclear. Only set overwriteExisting when the user asks to update, replace, overwrite, or refresh an existing note.'
+    instructions: MCP_INSTRUCTIONS
   }
 );
 
@@ -385,7 +410,7 @@ server.registerTool('search_pages', {
 
 server.registerTool('create_note', {
   title: 'Create Archivolt note',
-  description: 'Create a Markdown note as an Archivolt page. The server lightly formats plain notes into Archivolt-friendly blocks.',
+  description: 'Create an Archivolt page from Markdown or blackboard payloads. The server lightly formats plain notes into Archivolt-friendly blocks and preserves Mermaid/graph/chart payloads as blackboard blocks.',
   inputSchema: {
     projectId: z.string().default(DEFAULT_PROJECT_ID),
     title: z.string().min(1),
@@ -405,7 +430,7 @@ server.registerTool('create_note', {
 
 server.registerTool('update_note', {
   title: 'Update Archivolt note',
-  description: 'Update an existing Archivolt page by pageKey or title. This never creates a new page.',
+  description: 'Update an existing Archivolt page by pageKey or title. Supports Markdown notes and blackboard payloads. This never creates a new page.',
   inputSchema: {
     projectId: z.string().default(DEFAULT_PROJECT_ID),
     pageKey: z.string().optional(),

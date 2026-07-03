@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { X, GripVertical, Trash2, Save, Plus, Image, ChevronUp, ChevronDown, RotateCcw, Upload, FileText, Copy, Check, Undo2, Eye, Pencil, Heading1, Pilcrow, Code, Play, List, ListChecks, Sticker, FolderOpen } from 'lucide-react';
+import { X, GripVertical, Trash2, Save, Plus, Image, ChevronUp, ChevronDown, RotateCcw, Upload, FileText, Copy, Check, Undo2, Eye, Pencil, Heading1, Pilcrow, Code, Play, List, ListChecks, Sticker, FolderOpen, PanelTop } from 'lucide-react';
 import { cn } from '../utils/helpers';
 import { checklistItemsFromText, checklistTextFromItems } from '../utils/checklist';
 import { markdownToBlocks } from '../utils/markdownToBlocks';
@@ -185,6 +185,7 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
   const insertButtons = [
     ['heading', Heading1, 'HEADING'],
     ['text', Pilcrow, 'NOTE / TEXT'],
+    ['blackboard', PanelTop, 'BLACKBOARD'],
     ['code', Code, 'CODE BLOCK'],
     ['playground', Play, 'PLAYGROUND'],
     ['list', List, 'LIST'],
@@ -199,6 +200,33 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
     if (block.type === 'image') return block.file?.name || block.url || 'No image';
     return (block.value || block.type).replace(/\s+/g, ' ').slice(0, 42);
   };
+
+  const renderAddBlockButtons = (buttonClassName = '') => insertButtons.map(([type, Icon, label, isUnavailable]) => {
+    const tooltip = isUnavailable ? 'Sticker block already exists' : `Add ${label.toLowerCase()}`;
+
+    return (
+      <button
+        key={type}
+        type="button"
+        onClick={() => {
+          if (isUnavailable) {
+            setIsPreviewing(false);
+            notify('Sticker block already exists');
+            return;
+          }
+          addBlock(type);
+        }}
+        className={cn("editor-add-button grid h-9 w-9 shrink-0 place-items-center border cursor-pointer transition-colors hover:bg-[rgba(255,255,255,0.05)]", buttonClassName)}
+        style={{ borderColor: theme.borderColor, color: theme.textColor, borderRadius: '4px', background: 'transparent', opacity: isUnavailable ? 0.45 : 1 }}
+        title={tooltip}
+        aria-label={tooltip}
+        aria-disabled={isUnavailable}
+        data-tooltip={tooltip}
+      >
+        <Icon className="w-4 h-4" />
+      </button>
+    );
+  });
 
   const toggleBlockCollapsed = (id) => {
     setCollapsedBlockIds((prev) => {
@@ -233,6 +261,9 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
   // Actions
   const addBlock = (type) => {
     let defaultVal = '';
+    if (type === 'blackboard') {
+      defaultVal = '{\n  "title": "System map",\n  "nodes": [\n    { "id": "input", "label": "Input" },\n    { "id": "model", "label": "Model" },\n    { "id": "board", "label": "Board" }\n  ],\n  "edges": [\n    { "from": "input", "to": "model", "label": "prompt" },\n    { "from": "model", "to": "board", "label": "graph" }\n  ]\n}';
+    }
     if (type === 'playground') {
       defaultVal = "<style>\n  body { background: #111; color: #e4decd; font-family: monospace; padding: 2rem; }\n  button { background: #e4decd; color: #111; border: 1px solid #111; padding: 0.5rem 1rem; cursor: pointer; font-weight: bold; box-shadow: 2px 2px 0px #000; transition: all 0.1s ease; }\n  button:hover { background: #f0ebd9; transform: translate(-1px, -1px); box-shadow: 3px 3px 0px #000; }\n  button:active { background: #c3baa2; transform: translate(1px, 1px); box-shadow: 1px 1px 0px #000; }\n</style>\n\n<h1>>> READY</h1>\n<p id=\"state\">IDLE</p>\n<button onclick=\"document.getElementById('state').textContent='RUNNING'\">CLICK</button>";
     }
@@ -575,7 +606,7 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
                 <label className="font-mono-tech uppercase font-bold" style={{ fontSize: '9px', letterSpacing: '0.12em' }}>DOCUMENT_STRUCTURE</label>
                 <span className="font-mono-tech text-[9px] uppercase opacity-45">{blocks.length} blocks</span>
               </div>
-              <div className="retro-toggle-group shrink-0" style={{ borderColor: theme.textColor }}>
+              <div className="retro-toggle-group editor-mode-toggle shrink-0" style={{ borderColor: theme.textColor }}>
                 <button
                   type="button"
                   onClick={() => setIsPreviewing(false)}
@@ -594,40 +625,26 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
                 </button>
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="editor-toolbar-add flex items-center gap-2">
               <span className="shrink-0 font-mono-tech text-[9px] uppercase opacity-50">ADD</span>
               <div className="flex min-w-0 flex-1 gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-                {insertButtons.map(([type, Icon, label, isUnavailable]) => (
-                  <button
-                    key={type}
-                    type="button"
-                    onClick={() => {
-                      if (isUnavailable) {
-                        setIsPreviewing(false);
-                        notify('Sticker block already exists');
-                        return;
-                      }
-                      addBlock(type);
-                    }}
-                    className="grid h-9 w-9 shrink-0 place-items-center border cursor-pointer transition-colors hover:bg-[rgba(255,255,255,0.05)]"
-                    style={{ borderColor: theme.borderColor, color: theme.textColor, borderRadius: '4px', background: 'transparent', opacity: isUnavailable ? 0.45 : 1 }}
-                    title={isUnavailable ? 'Sticker block already exists' : `Add ${label.toLowerCase()}`}
-                    aria-label={isUnavailable ? 'Sticker block already exists' : `Add ${label.toLowerCase()}`}
-                    aria-disabled={isUnavailable}
-                  >
-                    <Icon className="w-4 h-4" />
-                  </button>
-                ))}
+                {renderAddBlockButtons()}
               </div>
             </div>
           </div>
           
-          {isPreviewing ? (
-            <div className="border p-6 md:p-10" style={{ borderColor: theme.borderColor, background: 'rgba(0,0,0,0.08)' }}>
-              {blocks.map((block, index) => renderContent(previewBlockForRender(block), index))}
-            </div>
-          ) : <div className="block-editor-list">
-            {blocks.map((block, index) => {
+          <div className="editor-workspace">
+            <aside
+              className="editor-add-rail"
+              aria-label="Add content block"
+              style={{ borderColor: theme.borderColor, background: theme.bgColor }}
+            >
+              <span className="font-mono-tech text-[9px] uppercase opacity-50">ADD</span>
+              {renderAddBlockButtons('editor-add-rail__button')}
+            </aside>
+            <div className={`editor-workspace__edit ${isPreviewing ? 'is-hidden-mobile' : ''}`}>
+              <div className="block-editor-list">
+              {blocks.map((block, index) => {
               const isDragged = draggedIndex === index;
               const isCollapsed = collapsedBlockIds.has(block.id);
               const selectedSticker = block.stickers?.find((sticker) => sticker.id === block.selectedStickerId);
@@ -695,6 +712,28 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
                           style={{ borderBottom: `1px solid ${theme.textColor}`, fontSize: '13px', minHeight: '60px', color: 'inherit' }}
                           placeholder="Write notes or description here..."
                           required
+                        />
+                      </div>
+                    )}
+
+                    {block.type === 'blackboard' && (
+                      <div>
+                        <label className="font-mono-tech block text-[9px] uppercase opacity-45 mb-1">BLACKBOARD AUTO DETECT</label>
+                        <textarea
+                          value={block.value}
+                          onChange={(e) => updateBlockValue(block.id, e.target.value)}
+                          aria-label={`Blackboard block ${index + 1}`}
+                          className="w-full p-3 font-mono-tech focus:outline-none resize-y"
+                          style={{
+                            background: 'rgba(0,0,0,0.3)',
+                            border: `1px solid ${theme.borderColor}`,
+                            color: '#e4decd',
+                            fontSize: '12px',
+                            minHeight: '180px'
+                          }}
+                          placeholder={'Paste Mermaid, graph JSON, chart JSON, or notes...\n\nExample:\n{\n  "type": "bar",\n  "labels": ["Q1", "Q2"],\n  "values": [12, 19]\n}'}
+                          required
+                          spellCheck="false"
                         />
                       </div>
                     )}
@@ -1152,59 +1191,75 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
 
                 </div>
               );
-            })}
-          </div>}
+              })}
+              </div>
 
-          <div className="space-y-2 pt-4 border-t border-dashed" style={{ borderColor: 'rgba(255,255,255,0.1)' }}>
-            <button
-              type="button"
-              onClick={() => setIsImportOpen((value) => !value)}
-              className="flex w-full items-center justify-between font-mono-tech uppercase font-bold cursor-pointer"
-              style={{ fontSize: '9px', letterSpacing: '0.12em', color: 'inherit' }}
-              aria-expanded={isImportOpen}
-            >
-              IMPORT_MARKDOWN
-              {isImportOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-            </button>
-            {isImportOpen && <>
-            <textarea
-              value={markdownInput}
-              onChange={(e) => setMarkdownInput(e.target.value)}
-              aria-label="Import markdown"
-              className="w-full p-3 bg-transparent font-mono-tech focus:outline-none resize-y"
-              style={{ border: `1px dashed ${theme.textColor}`, fontSize: '12px', minHeight: '110px', color: 'inherit' }}
-              placeholder={"# Function Name\nPaste AI-generated Markdown here..."}
-            />
-            <div className="flex flex-wrap gap-3">
-              <button
-                type="button"
-                onClick={copyArchivoltPrompt}
-                className="px-4 py-2 border font-mono-tech text-xs cursor-pointer hover:bg-[rgba(255,255,255,0.05)] transition-colors flex items-center gap-1.5"
-                style={{ borderColor: theme.borderColor, color: theme.textColor, borderRadius: '4px', background: 'transparent' }}
-              >
-                {promptCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />} {promptCopied ? 'COPIED PROMPT' : 'COPY PROMPT'}
-              </button>
-              <button
-                type="button"
-                onClick={importMarkdown}
-                className="px-4 py-2 border font-mono-tech text-xs cursor-pointer hover:bg-[rgba(255,255,255,0.05)] transition-colors flex items-center gap-1.5"
-                style={{ borderColor: theme.textColor, color: theme.textColor, borderRadius: '4px', background: 'transparent' }}
-              >
-                <FileText className="w-3.5 h-3.5" /> IMPORT MARKDOWN
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setMarkdownInput('');
-                  notify('Markdown input cleared');
-                }}
-                className="px-4 py-2 border font-mono-tech text-xs cursor-pointer hover:bg-[rgba(255,255,255,0.05)] transition-colors"
-                style={{ borderColor: theme.borderColor, color: theme.textColor, borderRadius: '4px', background: 'transparent' }}
-              >
-                CLEAR
-              </button>
+              <div className="space-y-2 pt-4 border-t border-dashed" style={{ borderColor: 'rgba(255,255,255,0.1)' }}>
+                <button
+                  type="button"
+                  onClick={() => setIsImportOpen((value) => !value)}
+                  className="flex w-full items-center justify-between font-mono-tech uppercase font-bold cursor-pointer"
+                  style={{ fontSize: '9px', letterSpacing: '0.12em', color: 'inherit' }}
+                  aria-expanded={isImportOpen}
+                >
+                  IMPORT_MARKDOWN
+                  {isImportOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                </button>
+                {isImportOpen && <>
+                <textarea
+                  value={markdownInput}
+                  onChange={(e) => setMarkdownInput(e.target.value)}
+                  aria-label="Import markdown"
+                  className="w-full p-3 bg-transparent font-mono-tech focus:outline-none resize-y"
+                  style={{ border: `1px dashed ${theme.textColor}`, fontSize: '12px', minHeight: '110px', color: 'inherit' }}
+                  placeholder={"# Function Name\nPaste AI-generated Markdown here..."}
+                />
+                <div className="flex flex-wrap gap-3">
+                  <button
+                    type="button"
+                    onClick={copyArchivoltPrompt}
+                    className="px-4 py-2 border font-mono-tech text-xs cursor-pointer hover:bg-[rgba(255,255,255,0.05)] transition-colors flex items-center gap-1.5"
+                    style={{ borderColor: theme.borderColor, color: theme.textColor, borderRadius: '4px', background: 'transparent' }}
+                  >
+                    {promptCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />} {promptCopied ? 'COPIED PROMPT' : 'COPY PROMPT'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={importMarkdown}
+                    className="px-4 py-2 border font-mono-tech text-xs cursor-pointer hover:bg-[rgba(255,255,255,0.05)] transition-colors flex items-center gap-1.5"
+                    style={{ borderColor: theme.textColor, color: theme.textColor, borderRadius: '4px', background: 'transparent' }}
+                  >
+                    <FileText className="w-3.5 h-3.5" /> IMPORT MARKDOWN
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMarkdownInput('');
+                      notify('Markdown input cleared');
+                    }}
+                    className="px-4 py-2 border font-mono-tech text-xs cursor-pointer hover:bg-[rgba(255,255,255,0.05)] transition-colors"
+                    style={{ borderColor: theme.borderColor, color: theme.textColor, borderRadius: '4px', background: 'transparent' }}
+                  >
+                    CLEAR
+                  </button>
+                </div>
+                </>}
+              </div>
             </div>
-            </>}
+
+            <aside
+              className={`editor-workspace__preview ${isPreviewing ? '' : 'is-hidden-mobile'}`}
+              aria-label="Record preview"
+              style={{ borderColor: theme.borderColor, background: 'rgba(0,0,0,0.08)' }}
+            >
+              <div className="editor-preview-header" style={{ borderColor: theme.borderColor }}>
+                <span>RECORD PREVIEW</span>
+                <span>{blocks.length} blocks</span>
+              </div>
+              <div className="editor-preview-body">
+                {blocks.map((block, index) => renderContent(previewBlockForRender(block), index))}
+              </div>
+            </aside>
           </div>
         </div>
 
