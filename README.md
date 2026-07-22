@@ -17,7 +17,14 @@ npm run dev
 
 1. Back up the existing `archive_state/main.data` value.
 2. Create the single owner in Supabase Authentication and disable public signups.
-3. Add the deployed and local app URLs to the Supabase Auth redirect allow list.
+3. In **Authentication → Email Templates → Magic Link**, replace the link with an OTP code:
+
+```html
+<h2>Archivolt sign-in code</h2>
+<p>Enter this code in Archivolt:</p>
+<p style="font-size: 32px; font-weight: bold; letter-spacing: 8px;">{{ .Token }}</p>
+```
+
 4. Run `supabase.sql` in the Supabase SQL editor.
 5. Copy `.env.example` to `.env` and fill in:
 
@@ -30,7 +37,7 @@ SUPABASE_SERVICE_ROLE_KEY=
 
 `SUPABASE_SERVICE_ROLE_KEY` is for the local MCP process only. Never prefix it with `VITE_`, commit it, or add it to a browser deployment.
 
-The first successful owner sign-in claims the existing `archive_state/main` row and preserved share records. The image bucket becomes private; the browser resolves stored image paths with short-lived signed URLs.
+The owner signs in with the six-digit email code. The first successful sign-in claims the existing `archive_state/main` row and preserved share records. The image bucket becomes private; the browser resolves stored image paths with short-lived signed URLs.
 
 Public share creation is intentionally disabled in this release.
 

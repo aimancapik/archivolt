@@ -16,6 +16,7 @@ import { shouldSeedArchive, uniqueRecordKey } from './utils/archiveIdentity';
 import { markdownToBlocks } from './utils/markdownToBlocks';
 import { orderedPageKeys } from './utils/pageOrder';
 import { normalizeSticker, pointerToStickerPoint, stickerPlacementStyle } from './utils/stickerPlacement';
+import { normalizeEmailOtp } from './utils/helpers';
 
 const STORAGE_KEY = 'archivolt.projects';
 const RECENT_KEY = 'archivolt.recentTarget';
@@ -284,6 +285,9 @@ export default function App() {
   const [session, setSession] = useState(null);
   const [authReady, setAuthReady] = useState(!isSupabaseConfigured);
   const [loginEmail, setLoginEmail] = useState('');
+  const [loginOtp, setLoginOtp] = useState('');
+  const [otpSent, setOtpSent] = useState(false);
+  const [isAuthSubmitting, setIsAuthSubmitting] = useState(false);
   const [authMessage, setAuthMessage] = useState('');
   const [authError, setAuthError] = useState('');
   const [remoteReady, setRemoteReady] = useState(!isSupabaseConfigured);
@@ -392,6 +396,12 @@ export default function App() {
   useEffect(() => {
     if (!isSupabaseConfigured) return undefined;
     let mounted = true;
+
+    const authParams = new URLSearchParams(window.location.hash.slice(1));
+    if (authParams.get('error_code')) {
+      setAuthError('That email link expired. Request a sign-in code below.');
+      window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`);
+    }
 
     supabase.auth.getSession().then(({ data, error }) => {
       if (!mounted) return;
@@ -1041,19 +1051,54 @@ export default function App() {
     });
   };
 
-  const sendMagicLink = async (event) => {
+  const sendEmailOtp = async (event) => {
     event.preventDefault();
     setAuthError('');
     setAuthMessage('');
-    const { error } = await supabase.auth.signInWithOtp({
-      email: loginEmail.trim(),
-      options: {
-        shouldCreateUser: false,
-        emailRedirectTo: window.location.origin
+    setIsAuthSubmitting(true);
+    try {
+      const { error } = await supabase.auth.signInWithOtp({
+        email: loginEmail.trim(),
+        options: { shouldCreateUser: false }
+      });
+      if (error) {
+        setAuthError(error.message);
+        return;
       }
-    });
-    if (error) setAuthError(error.message);
-    else setAuthMessage('Magic link sent. Check your email.');
+      setOtpSent(true);
+      setLoginOtp('');
+      setAuthMessage('Code sent. Check your email.');
+    } catch (error) {
+      setAuthError(error.message || 'Could not send a sign-in code.');
+    } finally {
+      setIsAuthSubmitting(false);
+    }
+  };
+
+  const verifyEmailOtp = async (event) => {
+    event.preventDefault();
+    const token = normalizeEmailOtp(loginOtp);
+    setAuthError('');
+    setAuthMessage('');
+    if (token.length !== 6) {
+      setAuthError('Enter the six-digit code from your email.');
+      return;
+    }
+
+    setIsAuthSubmitting(true);
+    try {
+      const { error } = await supabase.auth.verifyOtp({
+        email: loginEmail.trim(),
+        token,
+        type: 'email'
+      });
+      if (error) setAuthError(error.message);
+      else setAuthMessage('Code accepted. Opening archive.');
+    } catch (error) {
+      setAuthError(error.message || 'Could not verify the sign-in code.');
+    } finally {
+      setIsAuthSubmitting(false);
+    }
   };
 
   const signOut = async () => {
@@ -1307,35 +1352,63 @@ export default function App() {
         </div>
       ) : isSupabaseConfigured && !session ? (
         <div className="h-full w-full flex items-center justify-center px-6" style={{ color: '#e4decd', zIndex: 10 }}>
-          <form onSubmit={sendMagicLink} className="max-w-md w-full border p-8 text-center" style={{ borderColor: 'rgba(228,222,205,0.2)', background: '#0d0d0e' }}>
+          <form onSubmit={otpSent ? verifyEmailOtp : sendEmailOtp} className="max-w-md w-full border p-8 text-center" style={{ borderColor: 'rgba(228,222,205,0.2)', background: '#0d0d0e' }}>
             <h1 className="font-serif font-bold text-4xl mb-3">OWNER ACCESS</h1>
             <p className="font-mono-tech text-xs uppercase mb-6" style={{ opacity: 0.65 }}>
-              Enter the pre-approved owner email for a magic sign-in link.
+              {otpSent ? `Enter the code sent to ${loginEmail}.` : 'Enter the pre-approved owner email for a sign-in code.'}
             </p>
-            <input
-              type="email"
-              required
-              autoFocus
-              autoComplete="email"
-              value={loginEmail}
-              onChange={(event) => {
-                setLoginEmail(event.target.value);
-                setAuthError('');
-                setAuthMessage('');
-              }}
-              className="w-full p-4 bg-transparent font-mono-tech text-sm focus:outline-none"
-              style={{ border: '1px solid rgba(228,222,205,0.45)', color: '#e4decd' }}
-              aria-label="Owner email"
-              placeholder="owner@example.com"
-            />
+            {otpSent ? (
+              <input
+                type="text"
+                required
+                autoFocus
+                autoComplete="one-time-code"
+                inputMode="numeric"
+                pattern="[0-9]{6}"
+                maxLength={6}
+                value={loginOtp}
+                onChange={(event) => {
+                  setLoginOtp(normalizeEmailOtp(event.target.value));
+                  setAuthError('');
+                  setAuthMessage('');
+                }}
+                className="w-full p-4 bg-transparent text-center font-mono-tech text-2xl tracking-[0.45em] focus:outline-none"
+                style={{ border: '1px solid rgba(228,222,205,0.45)', color: '#e4decd' }}
+                aria-label="Owner sign-in code"
+                placeholder="000000"
+              />
+            ) : (
+              <input
+                type="email"
+                required
+                autoFocus
+                autoComplete="email"
+                value={loginEmail}
+                onChange={(event) => {
+                  setLoginEmail(event.target.value);
+                  setAuthError('');
+                  setAuthMessage('');
+                }}
+                className="w-full p-4 bg-transparent font-mono-tech text-sm focus:outline-none"
+                style={{ border: '1px solid rgba(228,222,205,0.45)', color: '#e4decd' }}
+                aria-label="Owner email"
+                placeholder="owner@example.com"
+              />
+            )}
             {(authError || authMessage) && (
               <p className="font-mono-tech text-[10px] uppercase mt-3" style={{ color: authError ? '#ff5f57' : '#8bd49c' }} role="status">
                 {authError || authMessage}
               </p>
             )}
-            <button type="submit" className="mt-6 w-full py-3 border font-display font-bold uppercase cursor-pointer" style={{ borderColor: '#e4decd', color: '#e4decd', background: 'transparent', letterSpacing: '0.12em' }}>
-              Send Magic Link
+            <button type="submit" disabled={isAuthSubmitting} className="mt-6 w-full py-3 border font-display font-bold uppercase cursor-pointer disabled:cursor-wait disabled:opacity-50" style={{ borderColor: '#e4decd', color: '#e4decd', background: 'transparent', letterSpacing: '0.12em' }}>
+              {isAuthSubmitting ? 'Please wait...' : otpSent ? 'Verify code' : 'Send code'}
             </button>
+            {otpSent && (
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <button type="button" onClick={sendEmailOtp} disabled={isAuthSubmitting} className="border px-3 py-2 font-mono-tech text-[9px] uppercase disabled:opacity-50" style={{ borderColor: 'rgba(228,222,205,0.35)', color: '#e4decd' }}>Send new code</button>
+                <button type="button" onClick={() => { setOtpSent(false); setLoginOtp(''); setAuthError(''); setAuthMessage(''); }} className="border px-3 py-2 font-mono-tech text-[9px] uppercase" style={{ borderColor: 'rgba(228,222,205,0.35)', color: '#e4decd' }}>Change email</button>
+              </div>
+            )}
           </form>
         </div>
       ) : isSupabaseConfigured && !remoteReady ? (
