@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Plus, ArrowLeft, ArrowRight, ChevronDown, Edit3, Trash2, Settings, Pin, Search, Share2, Home } from 'lucide-react';
+import { Plus, ArrowLeft, ArrowRight, ChevronDown, Edit3, Trash2, Settings, Pin, Search, Cloud, Home, LogOut } from 'lucide-react';
 import { BGPattern } from '../components/ui/bg-pattern';
 import { BeamsBackground } from '../components/ui/beams-background';
 import { DitheringShader } from '../components/ui/dithering-shader';
@@ -61,8 +61,11 @@ export const SidebarLayout = ({
   notify,
   orderedPageKeys,
   renderContent,
+  resolveAssetUrl,
   isSharedView = false,
-  createShareLink,
+  syncStatus = 'Saved',
+  onResolveConflict,
+  onSignOut,
   goHome
 }) => {
   const [commandOpen, setCommandOpen] = useState(false);
@@ -88,22 +91,6 @@ export const SidebarLayout = ({
     setIsAddingData(false);
     setIsEditingData(false);
     setHasDirtyEdit(false);
-  };
-
-  const copyShareLink = async () => {
-    try {
-      const shareUrl = await createShareLink?.();
-      if (!shareUrl) {
-        notify('Could not create share link', 'danger');
-        return;
-      }
-
-      navigator.clipboard.writeText(shareUrl)
-        .then(() => notify('Share link copied', 'success'))
-        .catch(() => notify('Could not copy share link', 'danger'));
-    } catch {
-      notify('Could not create share link', 'danger');
-    }
   };
 
   const goToProjectPage = async (projectId, key, headingId = null) => {
@@ -190,11 +177,12 @@ export const SidebarLayout = ({
     },
     ...(!isAddingData ? [
       {
-        key: 'share',
-        label: 'Copy Share Link',
-        ariaLabel: 'Copy share link',
-        icon: Share2,
-        run: copyShareLink
+        key: 'sync',
+        label: `Sync: ${syncStatus}`,
+        ariaLabel: `Archive sync status: ${syncStatus}`,
+        icon: Cloud,
+        run: () => syncStatus === 'Conflict' && onResolveConflict?.(),
+        active: syncStatus !== 'Saved'
       },
       {
         key: 'pin',
@@ -415,13 +403,20 @@ export const SidebarLayout = ({
                   })}
                 </div>
               </div>
-              <button
-                onClick={handleDeleteProject}
-                className="px-3 py-2 border-2 font-mono-tech text-[10px] uppercase transition-colors cursor-pointer flex items-center gap-2"
-                style={{ borderColor: '#ff5f57', backgroundColor: 'transparent', color: '#ff5f57' }}
-              >
-                <Trash2 className="w-3.5 h-3.5" /> Delete Project
-              </button>
+              <div className="flex items-center gap-2">
+                {onSignOut && (
+                  <button onClick={onSignOut} className="px-3 py-2 border-2 font-mono-tech text-[10px] uppercase transition-colors cursor-pointer flex items-center gap-2" style={{ borderColor: activeTheme.textColor }}>
+                    <LogOut className="w-3.5 h-3.5" /> Sign Out
+                  </button>
+                )}
+                <button
+                  onClick={handleDeleteProject}
+                  className="px-3 py-2 border-2 font-mono-tech text-[10px] uppercase transition-colors cursor-pointer flex items-center gap-2"
+                  style={{ borderColor: '#ff5f57', backgroundColor: 'transparent', color: '#ff5f57' }}
+                >
+                  <Trash2 className="w-3.5 h-3.5" /> Delete Project
+                </button>
+              </div>
             </div>
           )}
 
@@ -471,6 +466,7 @@ export const SidebarLayout = ({
                 mode={isEditingData ? 'edit' : 'create'}
                 notify={notify}
                 renderContent={renderContent}
+                resolveAssetUrl={resolveAssetUrl}
                 initialData={isEditingData ? {
                   recordType: 'document',
                   pageTitle: currentPageData.title,

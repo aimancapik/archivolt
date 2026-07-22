@@ -134,7 +134,7 @@ const ARCHIVOLT_PROMPT = [
   '[paste code/function/file here]'
 ].join('\n');
 
-export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activeColorTheme: theme, activeProject, confirmAction, initialData = null, mode = 'create', notify = () => {}, renderContent }) => {
+export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activeColorTheme: theme, activeProject, confirmAction, initialData = null, mode = 'create', notify = () => {}, renderContent, resolveAssetUrl = (url) => url }) => {
   const isEditing = mode === 'edit';
   // Form States
   const [recordType, setRecordType] = useState(initialData?.recordType || 'document');
@@ -957,7 +957,7 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
                         <label className="font-mono-tech block text-[9px] uppercase opacity-45 mb-2">IMAGE</label>
                         {(block.previewUrl || block.url) && (
                           <div className="mb-3 inline-block p-2" style={{ border: `1px solid ${theme.borderColor}`, background: 'rgba(0,0,0,0.12)' }}>
-                            <img src={block.previewUrl || block.url} alt="" className="max-h-36 w-auto" />
+                            <img src={block.previewUrl || resolveAssetUrl(block.url)} alt="" className="max-h-36 w-auto" />
                           </div>
                         )}
                         <input
@@ -1030,7 +1030,7 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
                                   className="h-full w-full overflow-hidden cursor-pointer"
                                   aria-label="Select sticker"
                                 >
-                                  <img src={sticker.previewUrl || sticker.url} alt="" className="h-full w-full object-cover" />
+                                  <img src={sticker.previewUrl || resolveAssetUrl(sticker.url)} alt="" className="h-full w-full object-cover" />
                                 </button>
                                 <button
                                   type="button"
@@ -1096,7 +1096,7 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
                             {block.stickers?.filter((sticker) => sticker.placed).map((sticker) => (
                               <img
                                 key={sticker.id}
-                                src={sticker.previewUrl || sticker.url}
+                                src={sticker.previewUrl || resolveAssetUrl(sticker.url)}
                                 alt=""
                                 className="absolute z-40 pointer-events-none"
                                 style={{

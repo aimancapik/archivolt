@@ -8,8 +8,9 @@ Default behavior:
 - If the user gives a project name instead of an ID, pick the closest project ID from `list_projects`.
 - If no project is mentioned, use `nexus-ui`.
 - Call `create_note` with a short title and a clean Markdown body.
-- Only set `overwriteExisting: true` when the user asks to update, replace, overwrite, or refresh an existing note.
-- For casual "save this" requests, create a new note instead of overwriting.
+- `create_note` always creates a new uniquely keyed page.
+- When the user asks to update, replace, overwrite, or refresh, find the exact `pageKey` with `list_pages`, `read_page`, or `search_pages`, then call `update_note`.
+- Never guess a `pageKey` for an update.
 
 Make notes readable without being asked:
 
