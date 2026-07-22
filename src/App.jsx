@@ -1,31 +1,34 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { ArrowRight, Plus } from 'lucide-react';
 import { CodeBlock } from './components/CodeBlock';
 import { BlackboardBlock } from './components/BlackboardBlock';
+import { QuickNoteComposer } from './components/QuickNoteComposer';
 import { useFeedback } from './hooks/useFeedback.jsx';
 import { InteractiveInputDemo } from './components/InteractiveInputDemo';
 import { LiveRunner } from './components/LiveRunner';
 import { SidebarLayout } from './layouts/SidebarLayout';
 import { DitheringShader } from './components/ui/dithering-shader';
-import { isSupabaseConfigured } from './lib/supabase';
-import { createDocumentShare, loadDocumentShare, loadRemoteProjects, saveRemoteProjects, uploadImage } from './lib/archiveStore';
+import { isSupabaseConfigured, supabase } from './lib/supabase';
+import { ArchiveConflictError, claimRemoteArchive, createAssetUrlMap, loadDocumentShare, loadRemoteProjects, saveRemoteProjects, subscribeToRemoteProjects, uploadImage } from './lib/archiveStore';
 import { checklistItemsFromText } from './utils/checklist';
 import { headingDomId } from './utils/documentStructure';
+import { shouldSeedArchive, uniqueRecordKey } from './utils/archiveIdentity';
+import { markdownToBlocks } from './utils/markdownToBlocks';
 import { orderedPageKeys } from './utils/pageOrder';
 import { normalizeSticker, pointerToStickerPoint, stickerPlacementStyle } from './utils/stickerPlacement';
 
 const STORAGE_KEY = 'archivolt.projects';
 const RECENT_KEY = 'archivolt.recentTarget';
-const SITE_PASSCODE = '246260';
-const SITE_ACCESS_KEY = 'archivolt.siteAccess';
+const CONFLICT_BACKUP_KEY = 'archivolt.conflictBackup';
 const BACKGROUND_OPTIONS = ['grid', 'dots', 'horizontal-lines', 'vertical-lines', 'checkerboard', 'wave', 'ripple', 'warp', 'beams'];
 const FALLBACK_BACKGROUND = 'dots';
 const InteractiveFolderGallery = React.lazy(() => import('./components/ui/interactive-folder-gallery').then((module) => ({ default: module.InteractiveFolderGallery })));
 
-const galleryPhotosFromText = (value = '') => value
+const galleryPhotosFromText = (value = '', resolveAssetUrl = (url) => url) => value
   .split('\n')
   .map((image) => image.trim())
   .filter(Boolean)
-  .map((image, index) => ({ id: `${index}-${image}`, image }));
+  .map((image, index) => ({ id: `${index}-${image}`, image: resolveAssetUrl(image) }));
 
 const randomBackgroundPattern = () => BACKGROUND_OPTIONS[Math.floor(Math.random() * BACKGROUND_OPTIONS.length)];
 const getShareTarget = () => {
@@ -260,29 +263,16 @@ const initialProjectsData = {
   }
 };
 
-const mergeProjectDocs = (project = {}, defaults = {}) => ({
-  ...defaults,
-  ...project,
-  docs: {
-    ...(defaults.docs || {}),
-    ...(project.docs || {})
-  }
-});
-
-const mergeInitialProjects = (projects = {}) => ({
-  ...initialProjectsData,
-  ...projects,
-  'nexus-ui': mergeProjectDocs(projects['nexus-ui'], initialProjectsData['nexus-ui']),
-  'project-nova': mergeProjectDocs(projects['project-nova'], initialProjectsData['project-nova'])
-});
-
-const loadProjects = () => {
+const loadCachedProjects = () => {
   try {
-    return mergeInitialProjects(JSON.parse(localStorage.getItem(STORAGE_KEY)) || initialProjectsData);
+    const value = localStorage.getItem(STORAGE_KEY);
+    return value ? JSON.parse(value) : null;
   } catch {
-    return initialProjectsData;
+    return null;
   }
 };
+
+const loadProjects = () => loadCachedProjects() || (isSupabaseConfigured ? {} : initialProjectsData);
 
 // --- MAIN APPLICATION ---
 export default function App() {
@@ -291,22 +281,36 @@ export default function App() {
   const [projects, setProjects] = useState(loadProjects);
   const [sharedProjects, setSharedProjects] = useState(null);
   const [shareError, setShareError] = useState('');
-  const [siteCode, setSiteCode] = useState('');
-  const [siteCodeError, setSiteCodeError] = useState('');
-  const [siteUnlocked, setSiteUnlocked] = useState(() => (
-    Boolean(shareTarget?.shareId) || localStorage.getItem(SITE_ACCESS_KEY) === '1'
-  ));
+  const [session, setSession] = useState(null);
+  const [authReady, setAuthReady] = useState(!isSupabaseConfigured);
+  const [loginEmail, setLoginEmail] = useState('');
+  const [authMessage, setAuthMessage] = useState('');
+  const [authError, setAuthError] = useState('');
   const [remoteReady, setRemoteReady] = useState(!isSupabaseConfigured);
+  const [syncStatus, setSyncStatus] = useState(isSupabaseConfigured ? 'Loading' : 'Saved');
+  const [remoteConflict, setRemoteConflict] = useState(null);
+  const [conflictOpen, setConflictOpen] = useState(false);
+  const [assetUrls, setAssetUrls] = useState({});
   const [activeProjectId, setActiveProjectId] = useState(pathTarget.projectId || 'nexus-ui');
   const [activePage, setActivePage] = useState(pathTarget.pageKey || 'getting_started');
   const [isHomeScreen, setIsHomeScreen] = useState(() => !shareTarget && !pathTarget.projectId);
   const [isAddingData, setIsAddingData] = useState(false);
   const [isEditingData, setIsEditingData] = useState(false);
-  const initialProjectsRef = React.useRef(projects);
-  const latestProjectsRef = React.useRef(projects);
-  const stickerDragOffsetRef = React.useRef({ x: 0, y: 0 });
-  const isStickerDraggingRef = React.useRef(false);
-  const stickerDragDirtyRef = React.useRef(false);
+  const [isQuickNoteOpen, setIsQuickNoteOpen] = useState(false);
+  const [advancedDraft, setAdvancedDraft] = useState(null);
+  const latestProjectsRef = useRef(projects);
+  const sessionRef = useRef(session);
+  const revisionRef = useRef(null);
+  const dirtyRef = useRef(false);
+  const saveTimerRef = useRef(null);
+  const saveInFlightRef = useRef(false);
+  const queuedSaveRef = useRef(false);
+  const pendingRevisionRef = useRef(null);
+  const applyingRemoteRef = useRef(false);
+  const conflictRef = useRef(null);
+  const stickerDragOffsetRef = useRef({ x: 0, y: 0 });
+  const isStickerDraggingRef = useRef(false);
+  const stickerDragDirtyRef = useRef(false);
 
   const visibleProjects = sharedProjects || projects;
   const activeProject = visibleProjects[activeProjectId];
@@ -322,15 +326,207 @@ export default function App() {
   const activeTheme = colorTheme || baseTheme;
   const backgroundPattern = currentPageData?.backgroundPattern || activeProject?.backgroundPattern || FALLBACK_BACKGROUND;
   const feedback = useFeedback(activeTheme);
+  const notify = feedback.notify;
+  const resolveAssetUrl = (value) => assetUrls[value] || value;
+  const ownerId = session?.user?.id;
+
+  const setConflict = useCallback((value) => {
+    conflictRef.current = value;
+    setRemoteConflict(value);
+  }, []);
+
+  const flushRemoteSave = useCallback(async () => {
+    if (!isSupabaseConfigured || !sessionRef.current?.user || !remoteReady || conflictRef.current) return;
+    if (saveInFlightRef.current) {
+      queuedSaveRef.current = true;
+      return;
+    }
+    if (!dirtyRef.current) return;
+
+    saveInFlightRef.current = true;
+    dirtyRef.current = false;
+    setSyncStatus('Saving');
+    const expectedRevision = revisionRef.current;
+    pendingRevisionRef.current = expectedRevision == null ? 0 : expectedRevision + 1;
+
+    try {
+      const result = await saveRemoteProjects(latestProjectsRef.current, expectedRevision, sessionRef.current.user.id);
+      revisionRef.current = result.revision;
+      pendingRevisionRef.current = null;
+      setSyncStatus('Saved');
+    } catch (error) {
+      pendingRevisionRef.current = null;
+      dirtyRef.current = true;
+      if (error instanceof ArchiveConflictError) {
+        try {
+          const remote = await loadRemoteProjects();
+          setConflict(remote);
+          setConflictOpen(true);
+          setSyncStatus('Conflict');
+        } catch {
+          setSyncStatus('Offline');
+        }
+      } else {
+        setSyncStatus('Offline');
+      }
+    } finally {
+      saveInFlightRef.current = false;
+      if (queuedSaveRef.current && !conflictRef.current) {
+        queuedSaveRef.current = false;
+        setTimeout(flushRemoteSave, 0);
+      }
+    }
+  }, [remoteReady, setConflict]);
+
+  const scheduleRemoteSave = useCallback((delay = 400) => {
+    if (!isSupabaseConfigured || !sessionRef.current?.user || !remoteReady || conflictRef.current) return;
+    clearTimeout(saveTimerRef.current);
+    setSyncStatus('Saving');
+    saveTimerRef.current = setTimeout(flushRemoteSave, delay);
+  }, [flushRemoteSave, remoteReady]);
+
+  useEffect(() => {
+    sessionRef.current = session;
+  }, [session]);
+
+  useEffect(() => {
+    if (!isSupabaseConfigured) return undefined;
+    let mounted = true;
+
+    supabase.auth.getSession().then(({ data, error }) => {
+      if (!mounted) return;
+      if (error) setAuthError(error.message);
+      setSession(data.session);
+      setAuthReady(true);
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      if (!mounted) return;
+      if (event === 'SIGNED_OUT') {
+        clearTimeout(saveTimerRef.current);
+        localStorage.removeItem(STORAGE_KEY);
+        localStorage.removeItem(RECENT_KEY);
+        localStorage.removeItem(CONFLICT_BACKUP_KEY);
+        applyingRemoteRef.current = true;
+        dirtyRef.current = false;
+        setConflict(null);
+        setRemoteReady(false);
+        setProjects({});
+      }
+      setSession(nextSession);
+      setAuthReady(true);
+    });
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, [setConflict]);
+
+  useEffect(() => {
+    if (!isSupabaseConfigured || !ownerId) return;
+    let cancelled = false;
+    setRemoteReady(false);
+    setSyncStatus('Loading');
+
+    (async () => {
+      await claimRemoteArchive();
+      const remote = await loadRemoteProjects();
+      const cached = loadCachedProjects();
+      const nextProjects = shouldSeedArchive(remote?.projects, cached)
+        ? initialProjectsData
+        : remote?.projects || cached;
+
+      let revision = remote?.revision ?? null;
+      if (!remote && nextProjects) {
+        revision = (await saveRemoteProjects(nextProjects, null, ownerId)).revision;
+      }
+      if (cancelled) return;
+
+      applyingRemoteRef.current = true;
+      revisionRef.current = revision;
+      dirtyRef.current = false;
+      setProjects(nextProjects || {});
+      setSyncStatus('Saved');
+    })()
+      .catch((error) => {
+        if (!cancelled) {
+          setAuthError(error.message);
+          setSyncStatus('Offline');
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setRemoteReady(true);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [ownerId]);
 
   useEffect(() => {
     latestProjectsRef.current = projects;
     if (shareTarget?.shareId) return;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
-    if (remoteReady && !isStickerDraggingRef.current && !stickerDragDirtyRef.current) {
-      saveRemoteProjects(projects).catch((error) => console.warn('Supabase save failed:', error.message));
+    if (!isSupabaseConfigured || sessionRef.current?.user) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
     }
-  }, [projects, remoteReady, shareTarget?.shareId]);
+    if (applyingRemoteRef.current && !remoteReady) return;
+    if (applyingRemoteRef.current) {
+      applyingRemoteRef.current = false;
+      return;
+    }
+    if (!isSupabaseConfigured) {
+      setSyncStatus('Saved');
+      return;
+    }
+    if (!remoteReady) return;
+    dirtyRef.current = true;
+    if (!isStickerDraggingRef.current && !stickerDragDirtyRef.current) scheduleRemoteSave();
+  }, [projects, remoteReady, scheduleRemoteSave, shareTarget?.shareId]);
+
+  useEffect(() => {
+    if (!isSupabaseConfigured || !ownerId || !remoteReady || shareTarget?.shareId) return undefined;
+    return subscribeToRemoteProjects((remote) => {
+      if (remote.revision <= (revisionRef.current ?? -1)) return;
+      if (remote.revision === pendingRevisionRef.current) return;
+      if (dirtyRef.current || saveInFlightRef.current || conflictRef.current) {
+        setConflict(remote);
+        setConflictOpen(true);
+        setSyncStatus('Conflict');
+        return;
+      }
+      applyingRemoteRef.current = true;
+      revisionRef.current = remote.revision;
+      setProjects(remote.projects);
+      setSyncStatus('Saved');
+    });
+  }, [ownerId, remoteReady, setConflict, shareTarget?.shareId]);
+
+  useEffect(() => {
+    if (!isSupabaseConfigured || !ownerId) return undefined;
+    let cancelled = false;
+    const refresh = () => createAssetUrlMap(visibleProjects).then((urls) => {
+      if (!cancelled) setAssetUrls(urls);
+    });
+    const initialTimer = setTimeout(refresh, 100);
+    const timer = setInterval(refresh, 45 * 60 * 1000);
+    return () => {
+      cancelled = true;
+      clearTimeout(initialTimer);
+      clearInterval(timer);
+    };
+  }, [ownerId, visibleProjects]);
+
+  useEffect(() => {
+    if (!isSupabaseConfigured) return undefined;
+    const onOnline = () => dirtyRef.current && scheduleRemoteSave(0);
+    const onOffline = () => setSyncStatus('Offline');
+    window.addEventListener('online', onOnline);
+    window.addEventListener('offline', onOffline);
+    return () => {
+      window.removeEventListener('online', onOnline);
+      window.removeEventListener('offline', onOffline);
+      clearTimeout(saveTimerRef.current);
+    };
+  }, [scheduleRemoteSave]);
 
   useEffect(() => {
     if (isHomeScreen || shareTarget?.shareId || !hasProjects) return;
@@ -347,19 +543,7 @@ export default function App() {
   }, [activePage, activeProject?.docs, activeProjectId, isHomeScreen, shareTarget]);
 
   useEffect(() => {
-    if (!isSupabaseConfigured || shareTarget?.shareId) return;
-
-    loadRemoteProjects()
-      .then((remoteProjects) => {
-        if (remoteProjects) setProjects(mergeInitialProjects(remoteProjects));
-        else return saveRemoteProjects(initialProjectsRef.current);
-      })
-      .catch((error) => console.warn('Supabase load failed:', error.message))
-      .finally(() => setRemoteReady(true));
-  }, [shareTarget?.shareId]);
-
-  useEffect(() => {
-    if (!shareTarget?.shareId) return;
+    if (!shareTarget?.shareId || (isSupabaseConfigured && !ownerId)) return;
 
     loadDocumentShare(shareTarget.shareId)
       .then((share) => {
@@ -381,7 +565,7 @@ export default function App() {
         setIsEditingData(false);
       })
       .catch(() => setShareError('Share not found'));
-  }, [shareTarget?.shareId]);
+  }, [ownerId, shareTarget?.shareId]);
 
   useEffect(() => {
     if (!shareTarget?.projectId || !shareTarget?.pageKey) return;
@@ -470,8 +654,89 @@ export default function App() {
     setIsHomeScreen(true);
     setIsAddingData(false);
     setIsEditingData(false);
+    setAdvancedDraft(null);
     setHomePath();
   };
+
+  const openQuickNote = useCallback((projectId) => {
+    const requestedProjectId = projectId || activeProjectId;
+    const targetProjectId = visibleProjects[requestedProjectId] ? requestedProjectId : Object.keys(visibleProjects)[0];
+    if (!targetProjectId) {
+      notify('Create a project before adding a note', 'danger');
+      return;
+    }
+    setActiveProjectId(targetProjectId);
+    setIsQuickNoteOpen(true);
+  }, [activeProjectId, notify, visibleProjects]);
+
+  const closeQuickNote = async ({ isDirty = false } = {}) => {
+    if (isDirty) {
+      const confirmed = await feedback.confirmAction({
+        title: 'Discard this note?',
+        message: 'Your unsaved title and note text will be lost.',
+        confirmText: 'Discard',
+        tone: 'danger'
+      });
+      if (!confirmed) return;
+    }
+    setIsQuickNoteOpen(false);
+  };
+
+  const openAdvancedDraft = ({ projectId, title, body }) => {
+    const targetProjectId = visibleProjects[projectId] ? projectId : Object.keys(visibleProjects)[0];
+    if (!targetProjectId) return;
+    const firstPage = orderedPageKeys(visibleProjects[targetProjectId].docs)[0];
+    setActiveProjectId(targetProjectId);
+    if (firstPage) setActivePage(firstPage);
+    setAdvancedDraft({
+      recordType: 'document',
+      pageTitle: title || 'Untitled note',
+      version: 'NOTE // DRAFT',
+      blocks: body ? markdownToBlocks(body) : undefined
+    });
+    setIsQuickNoteOpen(false);
+    setIsHomeScreen(false);
+    setIsAddingData(true);
+    setIsEditingData(false);
+  };
+
+  const handleQuickNoteSave = async ({ projectId, title, body }) => {
+    const project = projects[projectId];
+    if (!project) throw new Error('That project is no longer available.');
+    const pageKey = uniqueRecordKey(project.docs, title, '_', 'note');
+    const updatedAt = new Date().toISOString();
+
+    setProjects((currentProjects) => ({
+      ...currentProjects,
+      [projectId]: {
+        ...currentProjects[projectId],
+        docs: {
+          [pageKey]: {
+            backgroundPattern: randomBackgroundPattern(),
+            title,
+            subtitle: 'QUICK NOTE',
+            content: body ? markdownToBlocks(body) : [{ type: 'text', value: '' }],
+            updatedAt
+          },
+          ...currentProjects[projectId].docs
+        }
+      }
+    }));
+    setIsQuickNoteOpen(false);
+    openDocument(projectId, pageKey);
+    feedback.notify('Note saved', 'success');
+  };
+
+  useEffect(() => {
+    const handleNewNoteShortcut = (event) => {
+      if (!shareTarget && isHomeScreen && (event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === 'n') {
+        event.preventDefault();
+        openQuickNote();
+      }
+    };
+    window.addEventListener('keydown', handleNewNoteShortcut);
+    return () => window.removeEventListener('keydown', handleNewNoteShortcut);
+  }, [isHomeScreen, openQuickNote, shareTarget]);
 
   const renderHomeScreen = () => {
     const projectEntries = Object.values(visibleProjects);
@@ -493,31 +758,56 @@ export default function App() {
           shape="warp"
         />
         <div className="relative z-10 mx-auto flex min-h-full w-full max-w-6xl flex-col justify-center gap-8">
-          <header className="border-b pb-5" style={{ borderColor: 'rgba(228,222,205,0.22)' }}>
-            <p className="font-mono-tech text-[10px] font-bold uppercase" style={{ opacity: 0.58 }}>Archivolt Home</p>
-            <div className="mt-2 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+          <header className="archive-home-header">
+            <div className="archive-home-utility">
+              <p className="font-mono-tech text-[10px] font-bold uppercase" style={{ opacity: 0.58 }}>Archivolt / Personal knowledge vault</p>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => syncStatus === 'Conflict' && setConflictOpen(true)}
+                  className="archive-home-utility-button"
+                >
+                  <span className={`archive-sync-dot archive-sync-dot--${syncStatus.toLowerCase()}`} aria-hidden="true" />
+                  {syncStatus}
+                </button>
+                {isSupabaseConfigured && (
+                  <button type="button" onClick={signOut} className="archive-home-utility-button">Sign out</button>
+                )}
+              </div>
+            </div>
+            <div className="archive-home-hero">
               <div>
-                <h1 className="font-display text-4xl font-bold uppercase leading-none md:text-6xl">Select Archive</h1>
-                <p className="mt-3 max-w-2xl font-mono-tech text-xs uppercase leading-relaxed" style={{ opacity: 0.68 }}>
-                  Choose a project, or continue the last record you opened.
+                <h1>Your archive.</h1>
+                <p>
+                  Capture a thought in seconds, then shape it when you are ready.
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={continueRecent}
-                disabled={!projectEntries.length}
-                className="border px-5 py-3 text-left font-mono-tech text-xs font-bold uppercase transition-colors disabled:cursor-not-allowed disabled:opacity-40"
-                style={{ borderColor: '#e4decd', color: '#e4decd' }}
-              >
-                Continue Recent
-                <span className="mt-1 block max-w-[260px] truncate font-normal" style={{ opacity: 0.62 }}>
-                  {recentDoc ? `${recentProject.name} / ${recentDoc.title}` : 'First available record'}
-                </span>
-              </button>
+              <div className="archive-home-actions">
+                <button type="button" onClick={() => openQuickNote()} className="archive-home-new-note">
+                  <span><Plus aria-hidden="true" /> New note</span>
+                  <small>Quick capture / Ctrl or Cmd + Shift + N</small>
+                </button>
+                <button
+                  type="button"
+                  onClick={continueRecent}
+                  disabled={!projectEntries.length}
+                  className="archive-home-continue"
+                >
+                  <span>Continue where you left off <ArrowRight aria-hidden="true" /></span>
+                  <small>
+                    {recentDoc ? `${recentProject.name} / ${recentDoc.title}` : 'Open the first available note'}
+                  </small>
+                </button>
+              </div>
             </div>
           </header>
 
-          <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-3" aria-label="Projects">
+          <section aria-labelledby="archive-projects-title">
+            <div className="archive-home-section-heading">
+              <h2 id="archive-projects-title">Projects</h2>
+              <span>{projectEntries.length} total</span>
+            </div>
+            <div className="archive-project-grid">
             {projectEntries.map((project, index) => {
               const keys = orderedPageKeys(project.docs);
               const firstKey = keys[0];
@@ -529,7 +819,7 @@ export default function App() {
                   key={project.id}
                   type="button"
                   onClick={() => openProject(project.id)}
-                  className="group min-h-[176px] border p-5 text-left transition-transform hover:-translate-y-0.5 focus:outline-none focus:ring-2"
+                  className="archive-project-card group"
                   style={{
                     backgroundColor: theme.bgColor,
                     color: theme.textColor,
@@ -542,7 +832,7 @@ export default function App() {
                       <h2 className="mt-2 font-serif text-3xl font-bold uppercase leading-none">{project.name}</h2>
                     </div>
                     <span className="border px-2 py-1 font-mono-tech text-[10px] font-bold uppercase" style={{ borderColor: theme.textColor }}>
-                      {keys.length} rec
+                      {keys.length} {keys.length === 1 ? 'note' : 'notes'}
                     </span>
                   </div>
                   <div className="mt-8 border-t pt-4" style={{ borderColor: theme.borderColor }}>
@@ -552,6 +842,7 @@ export default function App() {
                 </button>
               );
             })}
+            </div>
           </section>
         </div>
       </main>
@@ -560,22 +851,20 @@ export default function App() {
 
   const handleSaveNewData = async (formData) => {
     if (formData.recordType === 'document') {
-      const newPageId = formData.pageTitle.toLowerCase().replace(/[^a-z0-9]+/g, '_');
+      const newPageId = uniqueRecordKey(activeProject.docs, formData.pageTitle, '_', 'note');
       const content = await buildContentBlocks(formData, `${activeProjectId}/${newPageId}`);
       setProjects((prev) => {
         const next = { ...prev };
         const project = { ...next[activeProjectId] };
-        const existingDoc = project.docs[newPageId];
-        const docs = Object.fromEntries(Object.entries(project.docs).filter(([id]) => id !== newPageId));
         project.docs = {
           [newPageId]: {
-            backgroundPattern: existingDoc?.backgroundPattern || randomBackgroundPattern(),
+            backgroundPattern: randomBackgroundPattern(),
             title: formData.pageTitle.toUpperCase(),
             subtitle: formData.version.toUpperCase(),
             content,
             updatedAt: new Date().toISOString()
           },
-          ...docs
+          ...project.docs
         };
         next[activeProjectId] = project;
         return next;
@@ -583,9 +872,10 @@ export default function App() {
       setActivePage(newPageId);
       setIsAddingData(false);
       setIsEditingData(false);
-      feedback.notify('Record committed', 'success');
+      setAdvancedDraft(null);
+      feedback.notify('Note created', 'success');
     } else {
-      const newId = formData.projectName.toLowerCase().replace(/\s+/g, '-');
+      const newId = uniqueRecordKey(projects, formData.projectName, '-', 'project');
       const content = await buildContentBlocks(formData, `${newId}/index`);
       setProjects((prev) => {
         const next = { ...prev };
@@ -609,7 +899,8 @@ export default function App() {
       setActivePage('index');
       setIsAddingData(false);
       setIsEditingData(false);
-      feedback.notify('Directory created', 'success');
+      setAdvancedDraft(null);
+      feedback.notify('Project created', 'success');
     }
   };
 
@@ -633,16 +924,16 @@ export default function App() {
     });
     setIsEditingData(false);
     setIsAddingData(false);
-    feedback.notify('Record updated', 'success');
+    feedback.notify('Note updated', 'success');
   };
 
   const handleDeleteDocument = async () => {
     if (!activeProject || pageKeys.length <= 1) {
-      feedback.notify('Project needs at least one document', 'danger');
+      feedback.notify('A project needs at least one note', 'danger');
       return;
     }
     const confirmed = await feedback.confirmAction({
-      title: 'Delete record',
+      title: 'Delete note',
       message: `Delete "${currentPageData.title}" from ${activeProject.name}?`,
       confirmText: 'Delete',
       tone: 'danger'
@@ -662,7 +953,7 @@ export default function App() {
     setActivePage(nextPage);
     setIsAddingData(false);
     setIsEditingData(false);
-    feedback.notify('Record deleted', 'success');
+    feedback.notify('Note deleted', 'success');
   };
 
   const handleDeleteProject = async () => {
@@ -672,10 +963,10 @@ export default function App() {
       return;
     }
     const typedName = await feedback.promptAction({
-      title: 'Delete directory',
-      message: `Type "${activeProject.name}" to delete this project and all documents.`,
+      title: 'Delete project',
+      message: `Type "${activeProject.name}" to delete this project and all its notes.`,
       confirmText: 'Delete',
-      inputLabel: 'Directory name',
+      inputLabel: 'Project name',
       tone: 'danger'
     });
     if (typedName !== activeProject.name) return;
@@ -690,7 +981,7 @@ export default function App() {
     setActivePage(Object.keys(projects[nextProjectId].docs)[0]);
     setIsAddingData(false);
     setIsEditingData(false);
-    feedback.notify('Directory deleted', 'success');
+    feedback.notify('Project deleted', 'success');
   };
 
   const handleTogglePinDocument = () => {
@@ -709,7 +1000,7 @@ export default function App() {
       next[activeProjectId] = project;
       return next;
     });
-    feedback.notify(willPin ? 'Record pinned' : 'Record unpinned', 'success');
+    feedback.notify(willPin ? 'Note pinned' : 'Note unpinned', 'success');
   };
 
   const setBackgroundPattern = (pattern) => {
@@ -750,32 +1041,73 @@ export default function App() {
     });
   };
 
-  const createShareLink = async () => {
-    if (!activeProject || !currentPageData) return '';
-
-    const shareId = await createDocumentShare({
-      project: {
-        id: activeProject.id,
-        name: activeProject.name,
-        version: activeProject.version
-      },
-      pageKey: activePage,
-      doc: currentPageData
+  const sendMagicLink = async (event) => {
+    event.preventDefault();
+    setAuthError('');
+    setAuthMessage('');
+    const { error } = await supabase.auth.signInWithOtp({
+      email: loginEmail.trim(),
+      options: {
+        shouldCreateUser: false,
+        emailRedirectTo: window.location.origin
+      }
     });
-    const url = new URL(window.location.href);
-    url.search = new URLSearchParams({ share: shareId }).toString();
-    return url.toString();
+    if (error) setAuthError(error.message);
+    else setAuthMessage('Magic link sent. Check your email.');
   };
 
-  const unlockSite = (event) => {
-    event.preventDefault();
-    if (siteCode.trim() !== SITE_PASSCODE) {
-      setSiteCodeError('Invalid access code');
-      return;
+  const signOut = async () => {
+    if (dirtyRef.current || conflictRef.current) {
+      const confirmed = await feedback.confirmAction({
+        title: 'Sign out with local changes',
+        message: 'Unsynced browser changes will be removed from this device.',
+        confirmText: 'Sign out',
+        tone: 'danger'
+      });
+      if (!confirmed) return;
     }
-    localStorage.setItem(SITE_ACCESS_KEY, '1');
-    setSiteCodeError('');
-    setSiteUnlocked(true);
+    clearTimeout(saveTimerRef.current);
+    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(RECENT_KEY);
+    localStorage.removeItem(CONFLICT_BACKUP_KEY);
+    applyingRemoteRef.current = true;
+    dirtyRef.current = false;
+    setConflict(null);
+    setRemoteReady(false);
+    setProjects({});
+    await supabase.auth.signOut();
+  };
+
+  const keepLocalVersion = async () => {
+    if (!session?.user || !remoteConflict) return;
+    setSyncStatus('Saving');
+    try {
+      const result = await saveRemoteProjects(latestProjectsRef.current, remoteConflict.revision, session.user.id);
+      revisionRef.current = result.revision;
+      dirtyRef.current = false;
+      setConflict(null);
+      setConflictOpen(false);
+      setSyncStatus('Saved');
+    } catch (error) {
+      const remote = error instanceof ArchiveConflictError ? await loadRemoteProjects() : remoteConflict;
+      setConflict(remote);
+      setSyncStatus(error instanceof ArchiveConflictError ? 'Conflict' : 'Offline');
+    }
+  };
+
+  const useRemoteVersion = () => {
+    if (!remoteConflict) return;
+    localStorage.setItem(CONFLICT_BACKUP_KEY, JSON.stringify({
+      createdAt: new Date().toISOString(),
+      projects: latestProjectsRef.current
+    }));
+    applyingRemoteRef.current = true;
+    revisionRef.current = remoteConflict.revision;
+    dirtyRef.current = false;
+    setProjects(remoteConflict.projects);
+    setConflict(null);
+    setConflictOpen(false);
+    setSyncStatus('Saved');
   };
 
   const toggleChecklistItem = (blockIndex, itemIndex) => {
@@ -827,9 +1159,9 @@ export default function App() {
   const finishStickerDrag = () => {
     isStickerDraggingRef.current = false;
     if (!stickerDragDirtyRef.current || shareTarget?.shareId || !remoteReady) return;
-    const projectsToSave = latestProjectsRef.current;
     stickerDragDirtyRef.current = false;
-    saveRemoteProjects(projectsToSave).catch((error) => console.warn('Supabase save failed:', error.message));
+    dirtyRef.current = true;
+    scheduleRemoteSave(0);
   };
 
   const stickerDragProps = (blockIndex, stickerIndex, interactive, sticker) => {
@@ -887,12 +1219,12 @@ export default function App() {
         if (!block.url) return null;
         return (
           <figure key={index} className="my-10 p-2" style={{ border: '1px solid rgba(255,255,255,0.1)', background: '#0d0d0e' }}>
-            <img src={block.url} alt="Reference" className="w-full h-auto" />
+            <img src={resolveAssetUrl(block.url)} alt="Reference" className="w-full h-auto" />
             {block.caption && <figcaption className="font-mono-tech uppercase mt-2" style={{ fontSize: '9px', color: '#888' }}>{block.caption}</figcaption>}
           </figure>
         );
       case 'gallery': {
-        const galleryPhotos = galleryPhotosFromText(block.value);
+        const galleryPhotos = galleryPhotosFromText(block.value, resolveAssetUrl);
         return (
           <React.Suspense key={index} fallback={<div className="font-mono-tech text-[10px] uppercase opacity-60 py-10">Loading gallery...</div>}>
             <InteractiveFolderGallery
@@ -906,7 +1238,7 @@ export default function App() {
         return (
           <img
             key={index}
-            src={block.url}
+            src={resolveAssetUrl(block.url)}
             alt=""
             className={`absolute z-40 touch-none select-none ${interactive ? 'cursor-grab active:cursor-grabbing' : 'pointer-events-none'}`}
             style={stickerPlacementStyle(block)}
@@ -917,7 +1249,7 @@ export default function App() {
         return (block.items || []).filter((sticker) => sticker.placed ?? true).map((sticker, stickerIndex) => (
           <img
             key={`${index}-${sticker.id || stickerIndex}`}
-            src={sticker.url}
+            src={resolveAssetUrl(sticker.url)}
             alt=""
             className={`absolute z-40 touch-none select-none ${interactive ? 'cursor-grab active:cursor-grabbing' : 'pointer-events-none'}`}
             style={stickerPlacementStyle(sticker)}
@@ -966,7 +1298,54 @@ export default function App() {
 
   return (
     <div className="h-screen w-screen relative vignette grain" style={{ background: '#0a0a0b', overflow: 'hidden' }}>
-      {shareTarget?.shareId && !sharedProjects && !shareError ? (
+      {isSupabaseConfigured && !authReady ? (
+        <div className="h-full w-full flex items-center justify-center px-6" style={{ color: '#e4decd', zIndex: 10 }}>
+          <div className="max-w-md w-full border p-8 text-center" style={{ borderColor: 'rgba(228,222,205,0.2)', background: '#0d0d0e' }}>
+            <h1 className="font-serif font-bold text-4xl mb-3">AUTHORIZING</h1>
+            <p className="font-mono-tech text-xs uppercase" style={{ opacity: 0.65 }}>Checking the owner session.</p>
+          </div>
+        </div>
+      ) : isSupabaseConfigured && !session ? (
+        <div className="h-full w-full flex items-center justify-center px-6" style={{ color: '#e4decd', zIndex: 10 }}>
+          <form onSubmit={sendMagicLink} className="max-w-md w-full border p-8 text-center" style={{ borderColor: 'rgba(228,222,205,0.2)', background: '#0d0d0e' }}>
+            <h1 className="font-serif font-bold text-4xl mb-3">OWNER ACCESS</h1>
+            <p className="font-mono-tech text-xs uppercase mb-6" style={{ opacity: 0.65 }}>
+              Enter the pre-approved owner email for a magic sign-in link.
+            </p>
+            <input
+              type="email"
+              required
+              autoFocus
+              autoComplete="email"
+              value={loginEmail}
+              onChange={(event) => {
+                setLoginEmail(event.target.value);
+                setAuthError('');
+                setAuthMessage('');
+              }}
+              className="w-full p-4 bg-transparent font-mono-tech text-sm focus:outline-none"
+              style={{ border: '1px solid rgba(228,222,205,0.45)', color: '#e4decd' }}
+              aria-label="Owner email"
+              placeholder="owner@example.com"
+            />
+            {(authError || authMessage) && (
+              <p className="font-mono-tech text-[10px] uppercase mt-3" style={{ color: authError ? '#ff5f57' : '#8bd49c' }} role="status">
+                {authError || authMessage}
+              </p>
+            )}
+            <button type="submit" className="mt-6 w-full py-3 border font-display font-bold uppercase cursor-pointer" style={{ borderColor: '#e4decd', color: '#e4decd', background: 'transparent', letterSpacing: '0.12em' }}>
+              Send Magic Link
+            </button>
+          </form>
+        </div>
+      ) : isSupabaseConfigured && !remoteReady ? (
+        <div className="h-full w-full flex items-center justify-center px-6" style={{ color: '#e4decd', zIndex: 10 }}>
+          <div className="max-w-md w-full border p-8 text-center" style={{ borderColor: 'rgba(228,222,205,0.2)', background: '#0d0d0e' }}>
+            <h1 className="font-serif font-bold text-4xl mb-3">LOADING ARCHIVE</h1>
+            <p className="font-mono-tech text-xs uppercase" style={{ opacity: 0.65 }}>{authError || 'Claiming the private archive.'}</p>
+          </div>
+        </div>
+      ) : shareTarget?.shareId && !sharedProjects && !shareError ? (
         <div className="h-full w-full flex items-center justify-center px-6" style={{ color: '#e4decd', zIndex: 10 }}>
           <div className="max-w-md w-full border p-8 text-center" style={{ borderColor: 'rgba(228,222,205,0.2)', background: '#0d0d0e' }}>
             <h1 className="font-serif font-bold text-4xl mb-3">LOADING SHARE</h1>
@@ -983,40 +1362,6 @@ export default function App() {
               This shared documentation link is invalid or unavailable.
             </p>
           </div>
-        </div>
-      ) : !shareTarget?.shareId && !siteUnlocked ? (
-        <div className="h-full w-full flex items-center justify-center px-6" style={{ color: '#e4decd', zIndex: 10 }}>
-          <form onSubmit={unlockSite} className="max-w-md w-full border p-8 text-center" style={{ borderColor: 'rgba(228,222,205,0.2)', background: '#0d0d0e' }}>
-            <h1 className="font-serif font-bold text-4xl mb-3">ACCESS CODE</h1>
-            <p className="font-mono-tech text-xs uppercase mb-6" style={{ opacity: 0.65 }}>
-              Enter the 6 digit code to access Archivolt.
-            </p>
-            <input
-              value={siteCode}
-              onChange={(event) => {
-                setSiteCode(event.target.value.replace(/\D/g, '').slice(0, 6));
-                setSiteCodeError('');
-              }}
-              inputMode="numeric"
-              pattern="[0-9]{6}"
-              autoFocus
-              className="w-full p-4 bg-transparent text-center font-mono-tech text-2xl tracking-[0.45em] focus:outline-none"
-              style={{ border: '1px solid rgba(228,222,205,0.45)', color: '#e4decd' }}
-              aria-label="Site access code"
-            />
-            {siteCodeError && (
-              <p className="font-mono-tech text-[10px] uppercase mt-3" style={{ color: '#ff5f57' }}>
-                {siteCodeError}
-              </p>
-            )}
-            <button
-              type="submit"
-              className="mt-6 w-full py-3 border font-display font-bold uppercase cursor-pointer"
-              style={{ borderColor: '#e4decd', color: '#e4decd', background: 'transparent', letterSpacing: '0.12em' }}
-            >
-              Unlock
-            </button>
-          </form>
         </div>
       ) : hasProjects && isHomeScreen && !shareTarget ? (
         renderHomeScreen()
@@ -1046,12 +1391,18 @@ export default function App() {
           handleDeleteDocument={handleDeleteDocument}
           handleDeleteProject={handleDeleteProject}
           handleTogglePinDocument={handleTogglePinDocument}
+          onQuickNote={openQuickNote}
+          advancedDraft={advancedDraft}
+          onCloseAdvancedEditor={() => setAdvancedDraft(null)}
           confirmAction={feedback.confirmAction}
           notify={feedback.notify}
           orderedPageKeys={orderedPageKeys}
           renderContent={renderContent}
+          resolveAssetUrl={resolveAssetUrl}
           isSharedView={Boolean(shareTarget)}
-          createShareLink={createShareLink}
+          syncStatus={syncStatus}
+          onResolveConflict={() => setConflictOpen(true)}
+          onSignOut={isSupabaseConfigured ? signOut : null}
           goHome={goHome}
         />
       ) : (
@@ -1073,6 +1424,33 @@ export default function App() {
             >
               Restore Starter Archive
             </button>
+          </div>
+        </div>
+      )}
+      {!shareTarget && hasProjects && (
+        <QuickNoteComposer
+          open={isQuickNoteOpen}
+          projects={visibleProjects}
+          defaultProjectId={activeProjectId}
+          theme={activeTheme}
+          onClose={closeQuickNote}
+          onSave={handleQuickNoteSave}
+          onAdvanced={openAdvancedDraft}
+        />
+      )}
+      {remoteConflict && conflictOpen && (
+        <div className="fixed inset-0 z-[90] grid place-items-center bg-black/70 px-4" role="dialog" aria-modal="true" aria-label="Resolve archive conflict">
+          <div className="w-full max-w-lg border-2 p-6" style={{ borderColor: '#e4decd', background: '#111213', color: '#e4decd' }}>
+            <h2 className="font-serif text-3xl font-bold uppercase">Sync Conflict</h2>
+            <p className="mt-3 font-mono-tech text-xs leading-relaxed opacity-70">
+              The browser and remote archive changed at the same time. Choose which complete archive to keep.
+            </p>
+            <div className="mt-6 grid gap-2 sm:grid-cols-3">
+              <button type="button" onClick={keepLocalVersion} className="border px-3 py-3 font-mono-tech text-[10px] font-bold uppercase">Keep Local</button>
+              <button type="button" onClick={useRemoteVersion} className="border px-3 py-3 font-mono-tech text-[10px] font-bold uppercase">Use Remote</button>
+              <button type="button" onClick={() => setConflictOpen(false)} className="border px-3 py-3 font-mono-tech text-[10px] font-bold uppercase">Cancel</button>
+            </div>
+            <p className="mt-4 font-mono-tech text-[9px] uppercase opacity-50">Using remote stores a local backup first.</p>
           </div>
         </div>
       )}

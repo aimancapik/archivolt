@@ -1,90 +1,74 @@
 # Archivolt
 
-Archivolt is a local-first documentation archive with a small MCP bridge for Codex.
+Archivolt is a local-first documentation archive with a private Supabase sync layer and an MCP bridge for Codex.
 
-The app is still the human UI. The MCP server is the agent door: Codex can create notes directly in the same Supabase-backed archive.
+The browser is the human UI. The local MCP process can list, read, search, create, and update pages in the same revisioned archive without silently overwriting concurrent browser changes.
 
-## Local Flow
+## Run locally
 
-```text
-You ask Codex
-  -> Codex calls Archivolt MCP
-  -> MCP writes a page into Supabase archive_state
-  -> Archivolt loads the page in the browser
-```
-
-## Use Case
-
-Use this when you want Codex to capture work without opening the app form manually.
-
-Examples:
-
-```text
-Create an Archivolt note titled "Site Visit 30 June" with this body:
-- Checked inverter status
-- Found loose terminal
-- Follow up with replacement photo
-```
-
-```text
-Summarize this chat into an Archivolt note called "MCP Setup Notes".
-```
-
-Codex writes the note as a document page under the default project `nexus-ui`.
-
-You can also say it casually:
-
-```text
-save this as archivolt note
-```
-
-Repo instructions in `AGENTS.md` tell Codex to choose the Archivolt MCP, pick/list projects, and format the note nicely.
-
-Say `update`, `replace`, `overwrite`, or `refresh` when you want Codex to reuse the closest existing document instead of creating a new page.
-
-## Run
+Without Supabase variables, Archivolt stays local and uses browser storage:
 
 ```powershell
 npm install
 npm run dev
 ```
 
+## Private Supabase setup
+
+1. Back up the existing `archive_state/main.data` value.
+2. Create the single owner in Supabase Authentication and disable public signups.
+3. Add the deployed and local app URLs to the Supabase Auth redirect allow list.
+4. Run `supabase.sql` in the Supabase SQL editor.
+5. Copy `.env.example` to `.env` and fill in:
+
+```dotenv
+VITE_SUPABASE_URL=
+VITE_SUPABASE_ANON_KEY=
+SUPABASE_URL=
+SUPABASE_SERVICE_ROLE_KEY=
+```
+
+`SUPABASE_SERVICE_ROLE_KEY` is for the local MCP process only. Never prefix it with `VITE_`, commit it, or add it to a browser deployment.
+
+The first successful owner sign-in claims the existing `archive_state/main` row and preserved share records. The image bucket becomes private; the browser resolves stored image paths with short-lived signed URLs.
+
+Public share creation is intentionally disabled in this release.
+
 ## MCP
 
-Project-local Codex config lives in `.codex/config.toml`.
-
-After installing dependencies, restart or reopen Codex in this repo so it loads the MCP server.
+Project-local Codex configuration lives in `.codex/config.toml`. Restart or reopen Codex after installing dependencies or changing MCP environment values.
 
 Available tools:
 
-- `list_projects`: list Archivolt project IDs
-- `create_note`: create a Markdown note as an Archivolt page
+- `list_projects`: list projects and page counts
+- `create_project`: create a uniquely keyed project with an index page
+- `list_pages`: list bounded page metadata for a project
+- `read_page`: read by page key or an unambiguous title
+- `search_pages`: search bounded results across page content
+- `create_note`: always create a uniquely keyed page
+- `update_note`: replace an existing page using its exact `pageKey`
 
-Manual check:
+Create and update are deliberately separate. Use `list_pages`, `read_page`, or `search_pages` to obtain the exact key before calling `update_note`.
 
 ```powershell
 npm run mcp:self-check
-```
-
-Manual MCP start:
-
-```powershell
 npm run mcp
 ```
 
-## Build
+## Checks
 
 ```powershell
+npm test
 npm run lint
 npm run build
 ```
 
-## Later
+The browser displays `Saving`, `Saved`, `Offline`, or `Conflict`. On conflict, keeping local explicitly replaces the newest remote archive; using remote first stores the browser copy in `archivolt.conflictBackup`.
 
-Skipped for now:
+## Deferred
 
-- realtime refresh after MCP writes
-- auth hardening for write access
-- packaging this MCP as a reusable plugin
-
-Add those when Archivolt needs multi-user or non-local use.
+- secure public sharing and expiry controls
+- archive export UI and version history
+- normalized project/page tables
+- remote HTTP MCP and MCP resources
+- append/delete tools and bundle refactoring

@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { Plus, ArrowLeft, ArrowRight, ChevronDown, Edit3, Trash2, Settings, Pin, Search, Share2, Home } from 'lucide-react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Plus, ArrowLeft, ArrowRight, ChevronDown, Edit3, Trash2, Settings, Pin, Search, Cloud, Home, LogOut } from 'lucide-react';
 import { BGPattern } from '../components/ui/bg-pattern';
 import { BeamsBackground } from '../components/ui/beams-background';
 import { DitheringShader } from '../components/ui/dithering-shader';
@@ -58,11 +58,17 @@ export const SidebarLayout = ({
   handleDeleteDocument,
   handleDeleteProject,
   handleTogglePinDocument,
+  onQuickNote,
+  advancedDraft,
+  onCloseAdvancedEditor,
   notify,
   orderedPageKeys,
   renderContent,
+  resolveAssetUrl,
   isSharedView = false,
-  createShareLink,
+  syncStatus = 'Saved',
+  onResolveConflict,
+  onSignOut,
   goHome
 }) => {
   const [commandOpen, setCommandOpen] = useState(false);
@@ -74,37 +80,22 @@ export const SidebarLayout = ({
   const activeBackgroundPattern = selectedBackgroundPattern;
   const isEditorOpen = !isSharedView && (isAddingData || isEditingData);
 
-  const confirmDiscardEdit = async () => {
-    if (!isEditingData || !hasDirtyEdit) return true;
+  const confirmDiscardEdit = useCallback(async () => {
+    if (!isEditorOpen || (!isAddingData && !hasDirtyEdit)) return true;
     return confirmAction({
       title: 'Discard edits',
       message: 'Leave the editor and discard unsaved changes?',
       confirmText: 'Discard',
       tone: 'danger'
     });
-  };
+  }, [confirmAction, hasDirtyEdit, isAddingData, isEditorOpen]);
 
-  const leaveEditor = () => {
+  const leaveEditor = useCallback(() => {
     setIsAddingData(false);
     setIsEditingData(false);
     setHasDirtyEdit(false);
-  };
-
-  const copyShareLink = async () => {
-    try {
-      const shareUrl = await createShareLink?.();
-      if (!shareUrl) {
-        notify('Could not create share link', 'danger');
-        return;
-      }
-
-      navigator.clipboard.writeText(shareUrl)
-        .then(() => notify('Share link copied', 'success'))
-        .catch(() => notify('Could not copy share link', 'danger'));
-    } catch {
-      notify('Could not create share link', 'danger');
-    }
-  };
+    onCloseAdvancedEditor?.();
+  }, [onCloseAdvancedEditor, setIsAddingData, setIsEditingData]);
 
   const goToProjectPage = async (projectId, key, headingId = null) => {
     if (projectId === activeProjectId && key === activePage && !headingId) return;
@@ -123,11 +114,18 @@ export const SidebarLayout = ({
 
   const startNewRecord = async () => {
     if (!await confirmDiscardEdit()) return;
+    onCloseAdvancedEditor?.();
     setIsAddingData(true);
     setIsEditingData(false);
     setHasDirtyEdit(false);
     setShowProjectSettings(false);
   };
+
+  const startQuickNote = useCallback(async () => {
+    if (!await confirmDiscardEdit()) return;
+    leaveEditor();
+    onQuickNote?.(activeProjectId);
+  }, [activeProjectId, confirmDiscardEdit, leaveEditor, onQuickNote]);
 
   const startEditRecord = async () => {
     if (isEditingData) {
@@ -135,6 +133,7 @@ export const SidebarLayout = ({
       leaveEditor();
       return;
     }
+    onCloseAdvancedEditor?.();
     setIsEditingData(true);
     setIsAddingData(false);
     setHasDirtyEdit(false);
@@ -143,9 +142,11 @@ export const SidebarLayout = ({
 
   const commands = (() => {
     const items = [
-      { id: 'new-record', label: 'New record', meta: 'Create document or project', type: 'ACTION', keywords: 'create add commit', run: startNewRecord },
-      { id: 'edit-record', label: isEditingData ? 'View current record' : 'Edit current record', meta: currentPageData?.title || 'Current document', type: 'ACTION', keywords: 'edit view document', run: startEditRecord },
-      { id: 'pin-record', label: currentPageData?.pinned ? 'Unpin current record' : 'Pin current record', meta: currentPageData?.title || 'Current document', type: 'ACTION', keywords: 'pin favorite order', run: handleTogglePinDocument }
+      { id: 'new-note', label: 'New note', meta: 'Quick capture', type: 'ACTION', keywords: 'create add capture', run: startQuickNote },
+      { id: 'advanced-editor', label: 'Advanced editor', meta: 'Blocks, images, boards, or a project', type: 'ACTION', keywords: 'create project blocks image board', run: startNewRecord },
+      { id: 'edit-note', label: isEditingData ? 'View current note' : 'Edit current note', meta: currentPageData?.title || 'Current note', type: 'ACTION', keywords: 'edit view note', run: startEditRecord },
+      { id: 'pin-note', label: currentPageData?.pinned ? 'Unpin current note' : 'Pin current note', meta: currentPageData?.title || 'Current note', type: 'ACTION', keywords: 'pin favorite order', run: handleTogglePinDocument },
+      { id: 'project-settings', label: 'Project settings', meta: 'Background, color, and project controls', type: 'ACTION', keywords: 'background color settings delete project', run: () => setShowProjectSettings(true) }
     ];
 
     Object.entries(projects).forEach(([projectId, project]) => {
@@ -155,7 +156,7 @@ export const SidebarLayout = ({
           id: `open-${projectId}-${pageKey}`,
           label: doc.title,
           meta: `${project.name} / ${doc.subtitle}`,
-          type: 'RECORD',
+          type: 'NOTE',
           keywords: `${project.name} ${pageKey} ${doc.subtitle} ${(doc.content || []).map((block) => block.value || '').join(' ')}`,
           run: () => goToProjectPage(projectId, pageKey)
         });
@@ -175,37 +176,36 @@ export const SidebarLayout = ({
     },
     {
       key: 'search',
-      label: 'Command Palette',
-      ariaLabel: 'Open command palette',
+      label: 'Search & commands',
+      ariaLabel: 'Open search and commands',
       icon: Search,
       run: () => setCommandOpen(true)
     },
     {
       key: 'new',
-      label: 'New Directory',
+      label: 'New note',
       icon: Plus,
-      run: startNewRecord,
-      active: isAddingData,
-      iconStyle: { transform: isAddingData ? 'rotate(45deg)' : 'none' }
+      run: startQuickNote
     },
     ...(!isAddingData ? [
       {
-        key: 'share',
-        label: 'Copy Share Link',
-        ariaLabel: 'Copy share link',
-        icon: Share2,
-        run: copyShareLink
+        key: 'sync',
+        label: `Sync: ${syncStatus}`,
+        ariaLabel: `Archive sync status: ${syncStatus}`,
+        icon: Cloud,
+        run: () => syncStatus === 'Conflict' && onResolveConflict?.(),
+        active: syncStatus !== 'Saved'
       },
       {
         key: 'pin',
-        label: currentPageData?.pinned ? 'Unpin Document' : 'Pin Document',
+        label: currentPageData?.pinned ? 'Unpin note' : 'Pin note',
         icon: Pin,
         run: handleTogglePinDocument,
         active: Boolean(currentPageData?.pinned)
       },
       {
         key: 'edit',
-        label: isEditingData ? 'View Document' : 'Edit Document',
+        label: isEditingData ? 'View note' : 'Edit note',
         icon: Edit3,
         run: startEditRecord,
         active: isEditingData
@@ -226,10 +226,14 @@ export const SidebarLayout = ({
         event.preventDefault();
         setCommandOpen(true);
       }
+      if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === 'n') {
+        event.preventDefault();
+        startQuickNote();
+      }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, []);
+  }, [startQuickNote]);
 
   return (
     <div className="h-full w-full flex justify-center items-center px-2 md:px-6 lg:px-10 animate-fade-in" style={{ zIndex: 10 }}>
@@ -415,13 +419,20 @@ export const SidebarLayout = ({
                   })}
                 </div>
               </div>
-              <button
-                onClick={handleDeleteProject}
-                className="px-3 py-2 border-2 font-mono-tech text-[10px] uppercase transition-colors cursor-pointer flex items-center gap-2"
-                style={{ borderColor: '#ff5f57', backgroundColor: 'transparent', color: '#ff5f57' }}
-              >
-                <Trash2 className="w-3.5 h-3.5" /> Delete Project
-              </button>
+              <div className="flex items-center gap-2">
+                {onSignOut && (
+                  <button onClick={onSignOut} className="px-3 py-2 border-2 font-mono-tech text-[10px] uppercase transition-colors cursor-pointer flex items-center gap-2" style={{ borderColor: activeTheme.textColor }}>
+                    <LogOut className="w-3.5 h-3.5" /> Sign Out
+                  </button>
+                )}
+                <button
+                  onClick={handleDeleteProject}
+                  className="px-3 py-2 border-2 font-mono-tech text-[10px] uppercase transition-colors cursor-pointer flex items-center gap-2"
+                  style={{ borderColor: '#ff5f57', backgroundColor: 'transparent', color: '#ff5f57' }}
+                >
+                  <Trash2 className="w-3.5 h-3.5" /> Delete Project
+                </button>
+              </div>
             </div>
           )}
 
@@ -455,12 +466,12 @@ export const SidebarLayout = ({
             )}
             
             {isEditorOpen ? (
-              // --- RENDER THE NEW DATA ENTRY FORM ---
+              // --- RENDER THE ADVANCED EDITOR ---
               <DataEntryForm 
                 key={`${isEditingData ? 'edit' : 'create'}-${activeProjectId}-${activePage}`}
                 onSave={isEditingData ? handleUpdateDocument : handleSaveNewData}
                 onDelete={isEditingData ? handleDeleteDocument : undefined}
-                onDirtyChange={isEditingData ? setHasDirtyEdit : undefined}
+                onDirtyChange={setHasDirtyEdit}
                 onCancel={async () => {
                   if (!await confirmDiscardEdit()) return;
                   leaveEditor();
@@ -471,18 +482,19 @@ export const SidebarLayout = ({
                 mode={isEditingData ? 'edit' : 'create'}
                 notify={notify}
                 renderContent={renderContent}
+                resolveAssetUrl={resolveAssetUrl}
                 initialData={isEditingData ? {
                   recordType: 'document',
                   pageTitle: currentPageData.title,
                   version: currentPageData.subtitle,
                   blocks: currentPageData.content
-                } : null}
+                } : advancedDraft}
               />
             ) : (
               // --- RENDER STANDARD DOCUMENTATION ---
               <>
                 {/* Decorative Archive Stamps */}
-                <div className="pointer-events-none absolute top-5 right-5 flex max-w-[30%] flex-col items-end gap-2 opacity-45 md:top-10 md:right-10">
+                <div className="archive-page-stamps pointer-events-none absolute top-5 right-5 flex max-w-[30%] flex-col items-end gap-2 opacity-45 md:top-10 md:right-10">
                   <div className="barcode" style={{ color: activeTheme.textColor }}></div>
                   <div className="max-w-full font-mono-tech text-[9px] text-right uppercase leading-tight">
                     <div>LOG_1:00:47</div>
@@ -492,7 +504,7 @@ export const SidebarLayout = ({
                 </div>
 
                 <header className="archive-page-header">
-                  <p className="archive-page-kicker">{activeProject.name} / {currentPageData?.subtitle || 'Record'}</p>
+                  <p className="archive-page-kicker">{activeProject.name} / {currentPageData?.subtitle || 'Note'}</p>
                   <h1 className="archive-page-title">
                     {currentPageData?.title}
                   </h1>
@@ -518,7 +530,7 @@ export const SidebarLayout = ({
                       className="flex flex-col items-start p-4 border-2 transition-all cursor-pointer"
                       style={{ borderColor: activeTheme.textColor }}
                     >
-                      <span className="text-[10px] font-mono-tech uppercase mb-2 flex items-center gap-1"><ArrowLeft className="w-3 h-3"/> PREV_RECORD</span>
+                      <span className="text-[10px] font-mono-tech uppercase mb-2 flex items-center gap-1"><ArrowLeft className="w-3 h-3"/> Previous note</span>
                       <span className="font-serif font-bold">{projects[activeProjectId].docs[prevPageKey].title}</span>
                     </button>
                   ) : <div />}
@@ -528,7 +540,7 @@ export const SidebarLayout = ({
                       className="flex flex-col items-end text-right p-4 border-2 transition-all cursor-pointer"
                       style={{ borderColor: activeTheme.textColor }}
                     >
-                      <span className="text-[10px] font-mono-tech uppercase mb-2 flex items-center gap-1">NEXT_RECORD <ArrowRight className="w-3 h-3"/></span>
+                      <span className="text-[10px] font-mono-tech uppercase mb-2 flex items-center gap-1">Next note <ArrowRight className="w-3 h-3"/></span>
                       <span className="font-serif font-bold">{projects[activeProjectId].docs[nextPageKey].title}</span>
                     </button>
                   ) : <div />}

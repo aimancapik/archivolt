@@ -34,7 +34,7 @@ export const CommandPalette = ({ commands, onClose, open, theme }) => {
 
   return (
     <div className="fixed inset-0 z-[60] grid place-items-start justify-center px-3 pt-20" style={{ background: 'rgba(0,0,0,0.42)' }}>
-      <div className="w-full max-w-2xl animate-fade-in shadow-2xl" role="dialog" aria-modal="true" aria-label="Command palette" style={{ background: theme.bgColor, border: `2px solid ${theme.textColor}`, color: theme.textColor }}>
+      <div className="w-full max-w-2xl animate-fade-in shadow-2xl" role="dialog" aria-modal="true" aria-label="Search notes and commands" style={{ background: theme.bgColor, border: `2px solid ${theme.textColor}`, color: theme.textColor }}>
         <div className="flex items-center gap-3 border-b px-4 py-3" style={{ borderColor: theme.borderColor }}>
           <Search className="h-4 w-4 opacity-65" />
           <input
@@ -46,8 +46,8 @@ export const CommandPalette = ({ commands, onClose, open, theme }) => {
             }}
             className="min-w-0 flex-1 bg-transparent font-mono-tech text-sm uppercase focus:outline-none"
             style={{ color: theme.textColor }}
-            placeholder="SEARCH RECORDS / ACTIONS..."
-            aria-label="Search commands"
+            placeholder="Search notes and commands…"
+            aria-label="Search notes and commands"
           />
           <button type="button" onClick={onClose} className="grid h-8 w-8 place-items-center border" style={{ borderColor: theme.borderColor }} aria-label="Close command palette">
             <X className="h-4 w-4" />
@@ -70,7 +70,7 @@ export const CommandPalette = ({ commands, onClose, open, theme }) => {
               </span>
             </button>
           )) : (
-            <div className="p-6 text-center font-mono-tech text-[10px] uppercase opacity-55">No matching signal</div>
+            <div className="p-6 text-center font-mono-tech text-[10px] uppercase opacity-55">No matches found</div>
           )}
         </div>
       </div>

@@ -93,54 +93,67 @@ const previewBlockForRender = (block) => {
 };
 
 const ARCHIVOLT_PROMPT = [
-  'Create an Archivolt documentation note for the code/function/file I provide.',
+  'Create a practical internal Archivolt note from the supplied code, function, or file.',
   '',
-  'Return Markdown only. Follow this exact format:',
+  'Analyze only the supplied source. Do not invent behavior, dependencies, filenames, or related functions. If the source does not reveal something, write: "Not evident from supplied source."',
   '',
-  '# [Short title]',
+  'Return Markdown only using this structure:',
+  '',
+  '# [Concise descriptive title]',
   '',
   '## Purpose',
-  'Explain what this code does in 1-3 short paragraphs.',
+  '',
+  'Explain what the code does, why it exists, and where it fits. Use 1-3 short paragraphs.',
   '',
   '## Code',
-  '```js',
-  '[paste the most important code here]',
+  '',
+  '```[language]',
+  '[Include the smallest verbatim excerpt that shows the main logic]',
   '```',
   '',
   '## How It Works',
-  '- Explain the main steps',
-  '- Mention inputs and outputs',
-  '- Mention where data is saved or returned',
+  '',
+  '- Describe the main execution steps.',
+  '- Identify inputs and expected types.',
+  '- Describe outputs, return values, and side effects.',
+  '- State where data is stored, sent, or returned.',
   '',
   '## Usage',
-  '```js',
-  '[show a realistic usage example]',
+  '',
+  '```[language]',
+  '[Show a minimal realistic example using identifiers from the source]',
   '```',
   '',
   '## Notes',
-  '- Mention edge cases',
-  '- Mention related files/functions',
-  '- Mention anything future me should remember',
+  '',
+  '- List important edge cases and failure conditions.',
+  '- Mention related files or functions only when visible in the source.',
+  '- Record assumptions, limitations, and maintenance details.',
+  '- Mark inferred usage as an assumption.',
   '',
   'Rules:',
-  '- Do not add intro text before the Markdown.',
-  '- Do not add closing commentary after the Markdown.',
-  '- Keep it practical, like internal project notes.',
-  '- If the language is not JavaScript, change the code fence language.',
-  '- Use headings, bullet lists, paragraphs, and fenced code blocks only.',
   '',
-  'Document this code:',
+  '- Do not add text before the title or after the Notes section.',
+  '- Preserve code and identifiers exactly.',
+  '- Detect the source language and use the correct code-fence language.',
+  '- Include the whole source only when it is short and necessary.',
+  '- Prefer specific explanations over generic descriptions.',
+  '- Do not repeat the same information across sections.',
+  '- Do not fabricate missing context.',
+  '- If no source is supplied, return only: `Source code required.`',
   '',
-  '[paste code/function/file here]'
+  'Source to document:',
+  '',
+  '[SOURCE_CODE_OR_FILE_CONTENT]'
 ].join('\n');
 
-export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activeColorTheme: theme, activeProject, confirmAction, initialData = null, mode = 'create', notify = () => {}, renderContent }) => {
+export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activeColorTheme: theme, activeProject, confirmAction, initialData = null, mode = 'create', notify = () => {}, renderContent, resolveAssetUrl = (url) => url }) => {
   const isEditing = mode === 'edit';
   // Form States
   const [recordType, setRecordType] = useState(initialData?.recordType || 'document');
   const [projectName, setProjectName] = useState('');
-  const [version, setVersion] = useState(initialData?.version || 'CODE_009 // TEST');
-  const [pageTitle, setPageTitle] = useState(initialData?.pageTitle || 'NEW REC');
+  const [version, setVersion] = useState(initialData?.version || 'NOTE // DRAFT');
+  const [pageTitle, setPageTitle] = useState(initialData?.pageTitle || 'Untitled note');
   const [isSaving, setIsSaving] = useState(false);
   const [markdownInput, setMarkdownInput] = useState('');
   const [promptCopied, setPromptCopied] = useState(false);
@@ -153,8 +166,8 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
   const [blocks, setBlocks] = useState(() => {
     if (!initialData?.blocks) {
       return [
-        { id: '1', type: 'heading', value: 'NEW SECTION' },
-        { id: '2', type: 'text', value: 'Enter description or notes here...' }
+        { id: '1', type: 'heading', value: 'Overview' },
+        { id: '2', type: 'text', value: '' }
       ];
     }
     const mapped = initialData.blocks.map(blockFromContent);
@@ -465,11 +478,11 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!pageTitle.trim()) {
-      notify('PAGE_TITLE is required', 'danger');
+      notify('Add a title before saving', 'danger');
       return;
     }
     if (recordType === 'project' && !projectName.trim()) {
-      notify('DIRECTORY_NAME is required', 'danger');
+      notify('Add a project name before saving', 'danger');
       return;
     }
     if (blocks.length === 0) {
@@ -518,17 +531,17 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
       <div className="flex items-center justify-between gap-4 mb-8 pb-4" style={{ borderBottom: `2px solid ${theme.textColor}` }}>
         <div>
           <div className="flex flex-wrap items-center gap-3">
-            <h2 className="font-display text-2xl font-bold uppercase" style={{ letterSpacing: '-0.03em' }}>DATA ENTRY TERMINAL</h2>
+            <h2 className="font-display text-2xl font-bold uppercase" style={{ letterSpacing: '-0.03em' }}>Advanced editor</h2>
             <span
               className="border px-2 py-1 font-mono-tech text-[9px] font-bold uppercase"
               style={{ borderColor: isDirty ? theme.textColor : theme.borderColor, opacity: isDirty ? 1 : 0.5 }}
               aria-live="polite"
             >
-              {isDirty ? 'UNSAVED' : 'SAVED'}
+              {isEditing ? (isDirty ? 'Unsaved' : 'Saved') : 'Draft'}
             </span>
           </div>
           <p className="font-mono-tech mt-1" style={{ fontSize: '10px', opacity: 0.6 }}>
-            {isEditing ? `EDITING: ${pageTitle}` : recordType === 'document' ? `AWAITING NEW DOCUMENT LOG FOR ${activeProject ? activeProject.name : ''}` : 'AWAITING NEW DIRECTORY INPUT...'}
+            {isEditing ? `Editing ${pageTitle}` : recordType === 'document' ? `New note in ${activeProject ? activeProject.name : ''}` : 'Create a project and its first note'}
           </p>
         </div>
         <button type="button" onClick={onCancel} className="p-2 transition-colors cursor-pointer" style={{ border: `1px solid ${theme.textColor}`, background: 'transparent', color: 'inherit' }} aria-label="Close editor">
@@ -536,26 +549,26 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
         </button>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-6" aria-label="Data entry form">
+      <form onSubmit={handleSubmit} className="space-y-6" aria-label="Advanced note editor">
         {/* Record Type Selector */}
         {!isEditing && <div className="space-y-2 mb-6">
-          <label className="font-mono-tech uppercase font-bold block" style={{ fontSize: '9px', letterSpacing: '0.12em' }}>RECORD_TYPE</label>
+          <label className="font-mono-tech uppercase font-bold block" style={{ fontSize: '9px', letterSpacing: '0.12em' }}>Create</label>
           <div className="retro-toggle-group" style={{ borderColor: theme.textColor }}>
             <button
               type="button"
-              onClick={() => { setRecordType('document'); setVersion('CODE_009 // TEST'); }}
+              onClick={() => { setRecordType('document'); setVersion('NOTE // DRAFT'); setPageTitle('Untitled note'); }}
               className="retro-toggle-btn cursor-pointer"
               style={recordType === 'document' ? { backgroundColor: theme.textColor, color: theme.bgColor } : { color: theme.textColor }}
             >
-              DOCUMENT
+              Note
             </button>
             <button
               type="button"
-              onClick={() => { setRecordType('project'); setVersion('01-NEW'); }}
+              onClick={() => { setRecordType('project'); setVersion('v1.0'); setPageTitle('Project overview'); }}
               className="retro-toggle-btn cursor-pointer"
               style={recordType === 'project' ? { backgroundColor: theme.textColor, color: theme.bgColor } : { color: theme.textColor }}
             >
-              PROJECT
+              Project
             </button>
           </div>
         </div>}
@@ -563,7 +576,7 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {recordType === 'document' ? (
             <div className="space-y-2">
-              <label className="font-mono-tech uppercase font-bold block" style={{ fontSize: '9px', letterSpacing: '0.12em' }}>TARGET_PROJECT</label>
+              <label className="font-mono-tech uppercase font-bold block" style={{ fontSize: '9px', letterSpacing: '0.12em' }}>Project</label>
               <input type="text" disabled value={activeProject ? activeProject.name : ''}
                 aria-label="Target project"
                 className="w-full p-3 bg-transparent font-mono-tech focus:outline-none uppercase opacity-60"
@@ -571,33 +584,33 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
             </div>
           ) : (
             <div className="space-y-2">
-              <label className="font-mono-tech uppercase font-bold block" style={{ fontSize: '9px', letterSpacing: '0.12em' }}>DIRECTORY_NAME</label>
-              <input type="text" required placeholder="e.g. SYSTEM_CORE" value={projectName}
+              <label className="font-mono-tech uppercase font-bold block" style={{ fontSize: '9px', letterSpacing: '0.12em' }}>Project name</label>
+              <input type="text" required placeholder="e.g. Product research" value={projectName}
                 onChange={(e) => setProjectName(e.target.value)}
-                aria-label="Directory name"
-                className="w-full p-3 bg-transparent font-mono-tech focus:outline-none uppercase"
+                aria-label="Project name"
+                className="w-full p-3 bg-transparent font-mono-tech focus:outline-none"
                 style={{ border: `1px solid ${theme.textColor}`, fontSize: '13px', color: 'inherit' }} />
             </div>
           )}
 
           <div className="space-y-2">
             <label className="font-mono-tech uppercase font-bold block" style={{ fontSize: '9px', letterSpacing: '0.12em' }}>
-              {recordType === 'document' ? 'SUBTITLE_STAMP' : 'VERSION_TAG'}
+              {recordType === 'document' ? 'Label' : 'Version'}
             </label>
             <input type="text" value={version}
               onChange={(e) => setVersion(e.target.value)}
-              aria-label={recordType === 'document' ? 'Subtitle stamp' : 'Version tag'}
+              aria-label={recordType === 'document' ? 'Note label' : 'Project version'}
               className="w-full p-3 bg-transparent font-mono-tech focus:outline-none uppercase"
               style={{ border: `1px solid ${theme.textColor}`, fontSize: '13px', color: 'inherit' }} />
           </div>
         </div>
 
         <div className="space-y-2">
-          <label className="font-mono-tech uppercase font-bold block" style={{ fontSize: '9px', letterSpacing: '0.12em' }}>PAGE_TITLE</label>
+          <label className="font-mono-tech uppercase font-bold block" style={{ fontSize: '9px', letterSpacing: '0.12em' }}>Note title</label>
           <input type="text" required value={pageTitle}
             onChange={(e) => setPageTitle(e.target.value)}
-            aria-label="Page title"
-            className="w-full p-3 bg-transparent font-mono-tech focus:outline-none uppercase"
+            aria-label="Note title"
+            className="w-full p-3 bg-transparent font-mono-tech focus:outline-none"
             style={{ border: `1px solid ${theme.textColor}`, fontSize: '13px', color: 'inherit' }} />
         </div>
 
@@ -606,7 +619,7 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
           <div className="editor-toolbar sticky top-0 z-20 border-b px-2 py-2 backdrop-blur" style={{ borderColor: theme.borderColor, background: theme.bgColor }}>
             <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-baseline gap-3">
-                <label className="font-mono-tech uppercase font-bold" style={{ fontSize: '9px', letterSpacing: '0.12em' }}>DOCUMENT_STRUCTURE</label>
+                <label className="font-mono-tech uppercase font-bold" style={{ fontSize: '9px', letterSpacing: '0.12em' }}>Content blocks</label>
                 <span className="font-mono-tech text-[9px] uppercase opacity-45">{blocks.length} blocks</span>
               </div>
               <div className="retro-toggle-group editor-mode-toggle shrink-0" style={{ borderColor: theme.textColor }}>
@@ -616,7 +629,7 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
                   className="retro-toggle-btn cursor-pointer flex items-center gap-1.5"
                   style={!isPreviewing ? { backgroundColor: theme.textColor, color: theme.bgColor } : { color: theme.textColor }}
                 >
-                  <Pencil className="w-3.5 h-3.5" /> EDIT
+                  <Pencil className="w-3.5 h-3.5" /> Edit
                 </button>
                 <button
                   type="button"
@@ -624,7 +637,7 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
                   className="retro-toggle-btn cursor-pointer flex items-center gap-1.5"
                   style={isPreviewing ? { backgroundColor: theme.textColor, color: theme.bgColor } : { color: theme.textColor }}
                 >
-                  <Eye className="w-3.5 h-3.5" /> PREVIEW
+                  <Eye className="w-3.5 h-3.5" /> Preview
                 </button>
               </div>
             </div>
@@ -957,7 +970,7 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
                         <label className="font-mono-tech block text-[9px] uppercase opacity-45 mb-2">IMAGE</label>
                         {(block.previewUrl || block.url) && (
                           <div className="mb-3 inline-block p-2" style={{ border: `1px solid ${theme.borderColor}`, background: 'rgba(0,0,0,0.12)' }}>
-                            <img src={block.previewUrl || block.url} alt="" className="max-h-36 w-auto" />
+                            <img src={block.previewUrl || resolveAssetUrl(block.url)} alt="" className="max-h-36 w-auto" />
                           </div>
                         )}
                         <input
@@ -1030,7 +1043,7 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
                                   className="h-full w-full overflow-hidden cursor-pointer"
                                   aria-label="Select sticker"
                                 >
-                                  <img src={sticker.previewUrl || sticker.url} alt="" className="h-full w-full object-cover" />
+                                  <img src={sticker.previewUrl || resolveAssetUrl(sticker.url)} alt="" className="h-full w-full object-cover" />
                                 </button>
                                 <button
                                   type="button"
@@ -1096,7 +1109,7 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
                             {block.stickers?.filter((sticker) => sticker.placed).map((sticker) => (
                               <img
                                 key={sticker.id}
-                                src={sticker.previewUrl || sticker.url}
+                                src={sticker.previewUrl || resolveAssetUrl(sticker.url)}
                                 alt=""
                                 className="absolute z-40 pointer-events-none"
                                 style={{
@@ -1207,7 +1220,7 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
                   style={{ fontSize: '9px', letterSpacing: '0.12em', color: 'inherit' }}
                   aria-expanded={isImportOpen}
                 >
-                  IMPORT_MARKDOWN
+                  Import Markdown
                   {isImportOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                 </button>
                 {isImportOpen && <>
@@ -1226,7 +1239,7 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
                     className="px-4 py-2 border font-mono-tech text-xs cursor-pointer hover:bg-[rgba(255,255,255,0.05)] transition-colors flex items-center gap-1.5"
                     style={{ borderColor: theme.borderColor, color: theme.textColor, borderRadius: '4px', background: 'transparent' }}
                   >
-                    {promptCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />} {promptCopied ? 'COPIED PROMPT' : 'COPY PROMPT'}
+                    {promptCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />} {promptCopied ? 'Prompt copied' : 'Copy AI prompt'}
                   </button>
                   <button
                     type="button"
@@ -1234,7 +1247,7 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
                     className="px-4 py-2 border font-mono-tech text-xs cursor-pointer hover:bg-[rgba(255,255,255,0.05)] transition-colors flex items-center gap-1.5"
                     style={{ borderColor: theme.textColor, color: theme.textColor, borderRadius: '4px', background: 'transparent' }}
                   >
-                    <FileText className="w-3.5 h-3.5" /> IMPORT MARKDOWN
+                    <FileText className="w-3.5 h-3.5" /> Import Markdown
                   </button>
                   <button
                     type="button"
@@ -1245,7 +1258,7 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
                     className="px-4 py-2 border font-mono-tech text-xs cursor-pointer hover:bg-[rgba(255,255,255,0.05)] transition-colors"
                     style={{ borderColor: theme.borderColor, color: theme.textColor, borderRadius: '4px', background: 'transparent' }}
                   >
-                    CLEAR
+                    Clear
                   </button>
                 </div>
                 </>}
@@ -1254,11 +1267,11 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
 
             <aside
               className={`editor-workspace__preview ${isPreviewing ? '' : 'is-hidden-mobile'}`}
-              aria-label="Record preview"
+              aria-label="Note preview"
               style={{ borderColor: theme.borderColor, background: 'rgba(0,0,0,0.08)' }}
             >
               <div className="editor-preview-header" style={{ borderColor: theme.borderColor }}>
-                <span>RECORD PREVIEW</span>
+                <span>Note preview</span>
                 <span>{blocks.length} blocks</span>
               </div>
               <div className="editor-preview-body">
@@ -1276,13 +1289,13 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
             className="py-4 px-5 bg-transparent font-display font-bold uppercase flex items-center justify-center gap-2 transition-all cursor-pointer disabled:cursor-not-allowed"
             style={{ border: `1px solid ${theme.borderColor}`, fontSize: '14px', letterSpacing: '0.1em', color: theme.textColor, opacity: canUndoBlocks ? 1 : 0.35 }}
           >
-            <Undo2 className="w-4 h-4" /> UNDO
+            <Undo2 className="w-4 h-4" /> Undo
           </button>
           <button type="submit"
             disabled={isSaving}
             className="flex-1 py-4 bg-transparent font-display font-bold uppercase flex items-center justify-center gap-2 transition-all cursor-pointer"
             style={{ border: `1px solid ${theme.textColor}`, fontSize: '14px', letterSpacing: '0.1em', color: theme.textColor, opacity: isSaving ? 0.6 : 1 }}>
-            <Save className="w-4 h-4" /> {isSaving ? 'SAVING...' : isEditing ? 'UPDATE_RECORD' : 'COMMIT_RECORD'}
+            <Save className="w-4 h-4" /> {isSaving ? 'Saving…' : isEditing ? 'Save changes' : recordType === 'project' ? 'Create project' : 'Create note'}
           </button>
           {isEditing && onDelete && (
             <button
@@ -1291,7 +1304,7 @@ export const DataEntryForm = ({ onSave, onCancel, onDelete, onDirtyChange, activ
               className="py-4 px-5 bg-transparent font-display font-bold uppercase flex items-center justify-center gap-2 transition-all cursor-pointer"
               style={{ border: '1px solid rgba(255,95,87,0.5)', fontSize: '12px', letterSpacing: '0.1em', color: '#ff5f57' }}
             >
-              <Trash2 className="w-4 h-4" /> DELETE
+              <Trash2 className="w-4 h-4" /> Delete note
             </button>
           )}
         </div>

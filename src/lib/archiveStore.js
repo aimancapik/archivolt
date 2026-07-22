@@ -3,10 +3,20 @@ import { isSupabaseConfigured, supabase } from './supabase';
 const STATE_ID = 'main';
 const BUCKET = 'documentation-images';
 const LOCAL_SHARES_KEY = 'archivolt.shares';
+const STORAGE_PREFIX = 'storage:';
 
-const newShareId = () => {
-  if (crypto.randomUUID) return crypto.randomUUID();
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+export class ArchiveConflictError extends Error {
+  constructor(message = 'Archive changed remotely') {
+    super(message);
+    this.name = 'ArchiveConflictError';
+  }
+}
+
+export const claimRemoteArchive = async () => {
+  if (!isSupabaseConfigured) return null;
+  const { data, error } = await supabase.rpc('claim_archive');
+  if (error) throw error;
+  return data?.[0] || null;
 };
 
 export const loadRemoteProjects = async () => {
@@ -14,40 +24,58 @@ export const loadRemoteProjects = async () => {
 
   const { data, error } = await supabase
     .from('archive_state')
-    .select('data')
+    .select('data, revision')
     .eq('id', STATE_ID)
     .maybeSingle();
 
   if (error) throw error;
-  return data?.data || null;
+  return data ? { projects: data.data, revision: Number(data.revision) || 0 } : null;
 };
 
-export const saveRemoteProjects = async (projects) => {
-  if (!isSupabaseConfigured) return;
+export const saveRemoteProjects = async (projects, expectedRevision, ownerId) => {
+  if (!isSupabaseConfigured) return { revision: Number(expectedRevision) || 0 };
 
-  const { error } = await supabase
-    .from('archive_state')
-    .upsert({ id: STATE_ID, data: projects, updated_at: new Date().toISOString() });
-
-  if (error) throw error;
-};
-
-export const createDocumentShare = async (data) => {
-  const id = newShareId();
-
-  if (!isSupabaseConfigured) {
-    const shares = JSON.parse(localStorage.getItem(LOCAL_SHARES_KEY) || '{}');
-    shares[id] = data;
-    localStorage.setItem(LOCAL_SHARES_KEY, JSON.stringify(shares));
-    return id;
+  if (expectedRevision == null) {
+    const { data, error } = await supabase
+      .from('archive_state')
+      .insert({ id: STATE_ID, owner_id: ownerId, data: projects, revision: 0 })
+      .select('revision')
+      .single();
+    if (error?.code === '23505') throw new ArchiveConflictError();
+    if (error) throw error;
+    return { revision: Number(data.revision) || 0 };
   }
 
-  const { error } = await supabase
-    .from('archive_shares')
-    .insert({ id, data });
+  const nextRevision = Number(expectedRevision) + 1;
+  const { data, error } = await supabase
+    .from('archive_state')
+    .update({ data: projects, revision: nextRevision, updated_at: new Date().toISOString() })
+    .eq('id', STATE_ID)
+    .eq('revision', expectedRevision)
+    .select('revision')
+    .maybeSingle();
 
   if (error) throw error;
-  return id;
+  if (!data) throw new ArchiveConflictError();
+  return { revision: Number(data.revision) };
+};
+
+export const subscribeToRemoteProjects = (onChange) => {
+  if (!isSupabaseConfigured) return () => {};
+
+  const channel = supabase
+    .channel('archivolt-archive-state')
+    .on('postgres_changes', {
+      event: '*',
+      schema: 'public',
+      table: 'archive_state',
+      filter: `id=eq.${STATE_ID}`
+    }, ({ new: row }) => {
+      if (row?.data) onChange({ projects: row.data, revision: Number(row.revision) || 0 });
+    })
+    .subscribe();
+
+  return () => supabase.removeChannel(channel);
 };
 
 export const loadDocumentShare = async (id) => {
@@ -68,6 +96,33 @@ export const loadDocumentShare = async (id) => {
   return data?.data || null;
 };
 
+export const createAssetUrlMap = async (projects) => {
+  if (!isSupabaseConfigured) return {};
+
+  const values = new Set();
+  for (const project of Object.values(projects || {})) {
+    for (const doc of Object.values(project.docs || {})) {
+      for (const block of doc.content || []) {
+        if (block.url) values.add(block.url);
+        if (block.type === 'gallery') {
+          String(block.value || '').split('\n').filter(Boolean).forEach((value) => values.add(value.trim()));
+        }
+        for (const item of block.items || []) {
+          if (item?.url) values.add(item.url);
+        }
+      }
+    }
+  }
+
+  const entries = await Promise.all([...values].map(async (value) => {
+    const path = storagePathFromValue(value);
+    if (!path) return null;
+    const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(path, 3600);
+    return error ? null : [value, data.signedUrl];
+  }));
+  return Object.fromEntries(entries.filter(Boolean));
+};
+
 export const uploadImage = async (file, folder = 'uploads') => {
   if (!file) return null;
 
@@ -84,7 +139,19 @@ export const uploadImage = async (file, folder = 'uploads') => {
   const path = `${folder}/${Date.now()}-${safeName}`;
   const { error } = await supabase.storage.from(BUCKET).upload(path, file);
   if (error) throw error;
+  return `${STORAGE_PREFIX}${path}`;
+};
 
-  const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
-  return data.publicUrl;
+const storagePathFromValue = (value) => {
+  if (typeof value !== 'string') return null;
+  if (value.startsWith(STORAGE_PREFIX)) return value.slice(STORAGE_PREFIX.length);
+
+  for (const marker of [
+    '/storage/v1/object/public/documentation-images/',
+    '/storage/v1/object/sign/documentation-images/'
+  ]) {
+    const index = value.indexOf(marker);
+    if (index >= 0) return decodeURIComponent(value.slice(index + marker.length).split('?')[0]);
+  }
+  return null;
 };
