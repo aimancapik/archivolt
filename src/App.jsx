@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { ArrowRight, Plus } from 'lucide-react';
 import { CodeBlock } from './components/CodeBlock';
 import { BlackboardBlock } from './components/BlackboardBlock';
+import { QuickNoteComposer } from './components/QuickNoteComposer';
 import { useFeedback } from './hooks/useFeedback.jsx';
 import { InteractiveInputDemo } from './components/InteractiveInputDemo';
 import { LiveRunner } from './components/LiveRunner';
@@ -11,6 +13,7 @@ import { ArchiveConflictError, claimRemoteArchive, createAssetUrlMap, loadDocume
 import { checklistItemsFromText } from './utils/checklist';
 import { headingDomId } from './utils/documentStructure';
 import { shouldSeedArchive, uniqueRecordKey } from './utils/archiveIdentity';
+import { markdownToBlocks } from './utils/markdownToBlocks';
 import { orderedPageKeys } from './utils/pageOrder';
 import { normalizeSticker, pointerToStickerPoint, stickerPlacementStyle } from './utils/stickerPlacement';
 
@@ -293,6 +296,8 @@ export default function App() {
   const [isHomeScreen, setIsHomeScreen] = useState(() => !shareTarget && !pathTarget.projectId);
   const [isAddingData, setIsAddingData] = useState(false);
   const [isEditingData, setIsEditingData] = useState(false);
+  const [isQuickNoteOpen, setIsQuickNoteOpen] = useState(false);
+  const [advancedDraft, setAdvancedDraft] = useState(null);
   const latestProjectsRef = useRef(projects);
   const sessionRef = useRef(session);
   const revisionRef = useRef(null);
@@ -321,6 +326,7 @@ export default function App() {
   const activeTheme = colorTheme || baseTheme;
   const backgroundPattern = currentPageData?.backgroundPattern || activeProject?.backgroundPattern || FALLBACK_BACKGROUND;
   const feedback = useFeedback(activeTheme);
+  const notify = feedback.notify;
   const resolveAssetUrl = (value) => assetUrls[value] || value;
   const ownerId = session?.user?.id;
 
@@ -648,8 +654,89 @@ export default function App() {
     setIsHomeScreen(true);
     setIsAddingData(false);
     setIsEditingData(false);
+    setAdvancedDraft(null);
     setHomePath();
   };
+
+  const openQuickNote = useCallback((projectId) => {
+    const requestedProjectId = projectId || activeProjectId;
+    const targetProjectId = visibleProjects[requestedProjectId] ? requestedProjectId : Object.keys(visibleProjects)[0];
+    if (!targetProjectId) {
+      notify('Create a project before adding a note', 'danger');
+      return;
+    }
+    setActiveProjectId(targetProjectId);
+    setIsQuickNoteOpen(true);
+  }, [activeProjectId, notify, visibleProjects]);
+
+  const closeQuickNote = async ({ isDirty = false } = {}) => {
+    if (isDirty) {
+      const confirmed = await feedback.confirmAction({
+        title: 'Discard this note?',
+        message: 'Your unsaved title and note text will be lost.',
+        confirmText: 'Discard',
+        tone: 'danger'
+      });
+      if (!confirmed) return;
+    }
+    setIsQuickNoteOpen(false);
+  };
+
+  const openAdvancedDraft = ({ projectId, title, body }) => {
+    const targetProjectId = visibleProjects[projectId] ? projectId : Object.keys(visibleProjects)[0];
+    if (!targetProjectId) return;
+    const firstPage = orderedPageKeys(visibleProjects[targetProjectId].docs)[0];
+    setActiveProjectId(targetProjectId);
+    if (firstPage) setActivePage(firstPage);
+    setAdvancedDraft({
+      recordType: 'document',
+      pageTitle: title || 'Untitled note',
+      version: 'NOTE // DRAFT',
+      blocks: body ? markdownToBlocks(body) : undefined
+    });
+    setIsQuickNoteOpen(false);
+    setIsHomeScreen(false);
+    setIsAddingData(true);
+    setIsEditingData(false);
+  };
+
+  const handleQuickNoteSave = async ({ projectId, title, body }) => {
+    const project = projects[projectId];
+    if (!project) throw new Error('That project is no longer available.');
+    const pageKey = uniqueRecordKey(project.docs, title, '_', 'note');
+    const updatedAt = new Date().toISOString();
+
+    setProjects((currentProjects) => ({
+      ...currentProjects,
+      [projectId]: {
+        ...currentProjects[projectId],
+        docs: {
+          [pageKey]: {
+            backgroundPattern: randomBackgroundPattern(),
+            title,
+            subtitle: 'QUICK NOTE',
+            content: body ? markdownToBlocks(body) : [{ type: 'text', value: '' }],
+            updatedAt
+          },
+          ...currentProjects[projectId].docs
+        }
+      }
+    }));
+    setIsQuickNoteOpen(false);
+    openDocument(projectId, pageKey);
+    feedback.notify('Note saved', 'success');
+  };
+
+  useEffect(() => {
+    const handleNewNoteShortcut = (event) => {
+      if (!shareTarget && isHomeScreen && (event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === 'n') {
+        event.preventDefault();
+        openQuickNote();
+      }
+    };
+    window.addEventListener('keydown', handleNewNoteShortcut);
+    return () => window.removeEventListener('keydown', handleNewNoteShortcut);
+  }, [isHomeScreen, openQuickNote, shareTarget]);
 
   const renderHomeScreen = () => {
     const projectEntries = Object.values(visibleProjects);
@@ -671,46 +758,56 @@ export default function App() {
           shape="warp"
         />
         <div className="relative z-10 mx-auto flex min-h-full w-full max-w-6xl flex-col justify-center gap-8">
-          <header className="border-b pb-5" style={{ borderColor: 'rgba(228,222,205,0.22)' }}>
-            <p className="font-mono-tech text-[10px] font-bold uppercase" style={{ opacity: 0.58 }}>Archivolt Home</p>
-            <div className="mt-2 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-              <div>
-                <h1 className="font-display text-4xl font-bold uppercase leading-none md:text-6xl">Select Archive</h1>
-                <p className="mt-3 max-w-2xl font-mono-tech text-xs uppercase leading-relaxed" style={{ opacity: 0.68 }}>
-                  Choose a project, or continue the last record you opened.
-                </p>
-              </div>
-              <div className="flex flex-wrap items-stretch gap-2">
+          <header className="archive-home-header">
+            <div className="archive-home-utility">
+              <p className="font-mono-tech text-[10px] font-bold uppercase" style={{ opacity: 0.58 }}>Archivolt / Personal knowledge vault</p>
+              <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => syncStatus === 'Conflict' && setConflictOpen(true)}
-                  className="border px-3 py-2 font-mono-tech text-[10px] font-bold uppercase"
-                  style={{ borderColor: '#e4decd', color: '#e4decd' }}
+                  className="archive-home-utility-button"
                 >
-                  Sync: {syncStatus}
+                  <span className={`archive-sync-dot archive-sync-dot--${syncStatus.toLowerCase()}`} aria-hidden="true" />
+                  {syncStatus}
                 </button>
                 {isSupabaseConfigured && (
-                  <button type="button" onClick={signOut} className="border px-3 py-2 font-mono-tech text-[10px] font-bold uppercase" style={{ borderColor: '#e4decd', color: '#e4decd' }}>
-                    Sign out
-                  </button>
+                  <button type="button" onClick={signOut} className="archive-home-utility-button">Sign out</button>
                 )}
+              </div>
+            </div>
+            <div className="archive-home-hero">
+              <div>
+                <h1>Your archive.</h1>
+                <p>
+                  Capture a thought in seconds, then shape it when you are ready.
+                </p>
+              </div>
+              <div className="archive-home-actions">
+                <button type="button" onClick={() => openQuickNote()} className="archive-home-new-note">
+                  <span><Plus aria-hidden="true" /> New note</span>
+                  <small>Quick capture / Ctrl or Cmd + Shift + N</small>
+                </button>
                 <button
                   type="button"
                   onClick={continueRecent}
                   disabled={!projectEntries.length}
-                  className="border px-5 py-3 text-left font-mono-tech text-xs font-bold uppercase transition-colors disabled:cursor-not-allowed disabled:opacity-40"
-                  style={{ borderColor: '#e4decd', color: '#e4decd' }}
+                  className="archive-home-continue"
                 >
-                  Continue Recent
-                  <span className="mt-1 block max-w-[260px] truncate font-normal" style={{ opacity: 0.62 }}>
-                    {recentDoc ? `${recentProject.name} / ${recentDoc.title}` : 'First available record'}
-                  </span>
+                  <span>Continue where you left off <ArrowRight aria-hidden="true" /></span>
+                  <small>
+                    {recentDoc ? `${recentProject.name} / ${recentDoc.title}` : 'Open the first available note'}
+                  </small>
                 </button>
               </div>
             </div>
           </header>
 
-          <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-3" aria-label="Projects">
+          <section aria-labelledby="archive-projects-title">
+            <div className="archive-home-section-heading">
+              <h2 id="archive-projects-title">Projects</h2>
+              <span>{projectEntries.length} total</span>
+            </div>
+            <div className="archive-project-grid">
             {projectEntries.map((project, index) => {
               const keys = orderedPageKeys(project.docs);
               const firstKey = keys[0];
@@ -722,7 +819,7 @@ export default function App() {
                   key={project.id}
                   type="button"
                   onClick={() => openProject(project.id)}
-                  className="group min-h-[176px] border p-5 text-left transition-transform hover:-translate-y-0.5 focus:outline-none focus:ring-2"
+                  className="archive-project-card group"
                   style={{
                     backgroundColor: theme.bgColor,
                     color: theme.textColor,
@@ -735,7 +832,7 @@ export default function App() {
                       <h2 className="mt-2 font-serif text-3xl font-bold uppercase leading-none">{project.name}</h2>
                     </div>
                     <span className="border px-2 py-1 font-mono-tech text-[10px] font-bold uppercase" style={{ borderColor: theme.textColor }}>
-                      {keys.length} rec
+                      {keys.length} {keys.length === 1 ? 'note' : 'notes'}
                     </span>
                   </div>
                   <div className="mt-8 border-t pt-4" style={{ borderColor: theme.borderColor }}>
@@ -745,6 +842,7 @@ export default function App() {
                 </button>
               );
             })}
+            </div>
           </section>
         </div>
       </main>
@@ -753,7 +851,7 @@ export default function App() {
 
   const handleSaveNewData = async (formData) => {
     if (formData.recordType === 'document') {
-      const newPageId = uniqueRecordKey(activeProject.docs, formData.pageTitle, '_', 'record');
+      const newPageId = uniqueRecordKey(activeProject.docs, formData.pageTitle, '_', 'note');
       const content = await buildContentBlocks(formData, `${activeProjectId}/${newPageId}`);
       setProjects((prev) => {
         const next = { ...prev };
@@ -774,7 +872,8 @@ export default function App() {
       setActivePage(newPageId);
       setIsAddingData(false);
       setIsEditingData(false);
-      feedback.notify('Record committed', 'success');
+      setAdvancedDraft(null);
+      feedback.notify('Note created', 'success');
     } else {
       const newId = uniqueRecordKey(projects, formData.projectName, '-', 'project');
       const content = await buildContentBlocks(formData, `${newId}/index`);
@@ -800,7 +899,8 @@ export default function App() {
       setActivePage('index');
       setIsAddingData(false);
       setIsEditingData(false);
-      feedback.notify('Directory created', 'success');
+      setAdvancedDraft(null);
+      feedback.notify('Project created', 'success');
     }
   };
 
@@ -824,16 +924,16 @@ export default function App() {
     });
     setIsEditingData(false);
     setIsAddingData(false);
-    feedback.notify('Record updated', 'success');
+    feedback.notify('Note updated', 'success');
   };
 
   const handleDeleteDocument = async () => {
     if (!activeProject || pageKeys.length <= 1) {
-      feedback.notify('Project needs at least one document', 'danger');
+      feedback.notify('A project needs at least one note', 'danger');
       return;
     }
     const confirmed = await feedback.confirmAction({
-      title: 'Delete record',
+      title: 'Delete note',
       message: `Delete "${currentPageData.title}" from ${activeProject.name}?`,
       confirmText: 'Delete',
       tone: 'danger'
@@ -853,7 +953,7 @@ export default function App() {
     setActivePage(nextPage);
     setIsAddingData(false);
     setIsEditingData(false);
-    feedback.notify('Record deleted', 'success');
+    feedback.notify('Note deleted', 'success');
   };
 
   const handleDeleteProject = async () => {
@@ -863,10 +963,10 @@ export default function App() {
       return;
     }
     const typedName = await feedback.promptAction({
-      title: 'Delete directory',
-      message: `Type "${activeProject.name}" to delete this project and all documents.`,
+      title: 'Delete project',
+      message: `Type "${activeProject.name}" to delete this project and all its notes.`,
       confirmText: 'Delete',
-      inputLabel: 'Directory name',
+      inputLabel: 'Project name',
       tone: 'danger'
     });
     if (typedName !== activeProject.name) return;
@@ -881,7 +981,7 @@ export default function App() {
     setActivePage(Object.keys(projects[nextProjectId].docs)[0]);
     setIsAddingData(false);
     setIsEditingData(false);
-    feedback.notify('Directory deleted', 'success');
+    feedback.notify('Project deleted', 'success');
   };
 
   const handleTogglePinDocument = () => {
@@ -900,7 +1000,7 @@ export default function App() {
       next[activeProjectId] = project;
       return next;
     });
-    feedback.notify(willPin ? 'Record pinned' : 'Record unpinned', 'success');
+    feedback.notify(willPin ? 'Note pinned' : 'Note unpinned', 'success');
   };
 
   const setBackgroundPattern = (pattern) => {
@@ -1291,6 +1391,9 @@ export default function App() {
           handleDeleteDocument={handleDeleteDocument}
           handleDeleteProject={handleDeleteProject}
           handleTogglePinDocument={handleTogglePinDocument}
+          onQuickNote={openQuickNote}
+          advancedDraft={advancedDraft}
+          onCloseAdvancedEditor={() => setAdvancedDraft(null)}
           confirmAction={feedback.confirmAction}
           notify={feedback.notify}
           orderedPageKeys={orderedPageKeys}
@@ -1323,6 +1426,17 @@ export default function App() {
             </button>
           </div>
         </div>
+      )}
+      {!shareTarget && hasProjects && (
+        <QuickNoteComposer
+          open={isQuickNoteOpen}
+          projects={visibleProjects}
+          defaultProjectId={activeProjectId}
+          theme={activeTheme}
+          onClose={closeQuickNote}
+          onSave={handleQuickNoteSave}
+          onAdvanced={openAdvancedDraft}
+        />
       )}
       {remoteConflict && conflictOpen && (
         <div className="fixed inset-0 z-[90] grid place-items-center bg-black/70 px-4" role="dialog" aria-modal="true" aria-label="Resolve archive conflict">
