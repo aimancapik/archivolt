@@ -1,7 +1,5 @@
 export const cn = (...args) => args.filter(Boolean).join(' ');
 
-export const normalizeEmailOtp = (value = '') => String(value).replace(/\D/g, '').slice(0, 6);
-
 export const syntaxHighlight = (code, language) => {
   if (!code) return { __html: '' };
   let html = code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');

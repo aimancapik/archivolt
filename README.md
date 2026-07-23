@@ -13,20 +13,17 @@ npm install
 npm run dev
 ```
 
-## Private Supabase setup
+## Temporary browser access
+
+The browser currently uses the fixed access code `246260`. Unlocking is remembered on that browser until **Lock** is selected.
+
+This is a temporary client-side gate, not secure authentication: the code is present in the built JavaScript. A browser with an existing Supabase session keeps private sync; otherwise Archivolt falls back to browser storage.
+
+## Private Supabase sync
 
 1. Back up the existing `archive_state/main.data` value.
-2. Create the single owner in Supabase Authentication and disable public signups.
-3. In **Authentication → Email Templates → Magic Link**, replace the link with an OTP code:
-
-```html
-<h2>Archivolt sign-in code</h2>
-<p>Enter this code in Archivolt:</p>
-<p style="font-size: 32px; font-weight: bold; letter-spacing: 8px;">{{ .Token }}</p>
-```
-
-4. Run `supabase.sql` in the Supabase SQL editor.
-5. Copy `.env.example` to `.env` and fill in:
+2. Run `supabase.sql` in the Supabase SQL editor.
+3. Copy `.env.example` to `.env` and fill in:
 
 ```dotenv
 VITE_SUPABASE_URL=
@@ -36,8 +33,6 @@ SUPABASE_SERVICE_ROLE_KEY=
 ```
 
 `SUPABASE_SERVICE_ROLE_KEY` is for the local MCP process only. Never prefix it with `VITE_`, commit it, or add it to a browser deployment.
-
-The owner signs in with the six-digit email code. The first successful sign-in claims the existing `archive_state/main` row and preserved share records. The image bucket becomes private; the browser resolves stored image paths with short-lived signed URLs.
 
 Public share creation is intentionally disabled in this release.
 

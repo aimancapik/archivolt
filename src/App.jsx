@@ -16,11 +16,13 @@ import { shouldSeedArchive, uniqueRecordKey } from './utils/archiveIdentity';
 import { markdownToBlocks } from './utils/markdownToBlocks';
 import { orderedPageKeys } from './utils/pageOrder';
 import { normalizeSticker, pointerToStickerPoint, stickerPlacementStyle } from './utils/stickerPlacement';
-import { normalizeEmailOtp } from './utils/helpers';
 
 const STORAGE_KEY = 'archivolt.projects';
 const RECENT_KEY = 'archivolt.recentTarget';
 const CONFLICT_BACKUP_KEY = 'archivolt.conflictBackup';
+// ponytail: client-only gate; replace with server auth when access must be secure.
+const SITE_PASSCODE = '246260';
+const SITE_ACCESS_KEY = 'archivolt.siteAccess';
 const BACKGROUND_OPTIONS = ['grid', 'dots', 'horizontal-lines', 'vertical-lines', 'checkerboard', 'wave', 'ripple', 'warp', 'beams'];
 const FALLBACK_BACKGROUND = 'dots';
 const InteractiveFolderGallery = React.lazy(() => import('./components/ui/interactive-folder-gallery').then((module) => ({ default: module.InteractiveFolderGallery })));
@@ -273,7 +275,7 @@ const loadCachedProjects = () => {
   }
 };
 
-const loadProjects = () => loadCachedProjects() || (isSupabaseConfigured ? {} : initialProjectsData);
+const loadProjects = () => loadCachedProjects() || initialProjectsData;
 
 // --- MAIN APPLICATION ---
 export default function App() {
@@ -283,13 +285,12 @@ export default function App() {
   const [sharedProjects, setSharedProjects] = useState(null);
   const [shareError, setShareError] = useState('');
   const [session, setSession] = useState(null);
-  const [authReady, setAuthReady] = useState(!isSupabaseConfigured);
-  const [loginEmail, setLoginEmail] = useState('');
-  const [loginOtp, setLoginOtp] = useState('');
-  const [otpSent, setOtpSent] = useState(false);
-  const [isAuthSubmitting, setIsAuthSubmitting] = useState(false);
-  const [authMessage, setAuthMessage] = useState('');
-  const [authError, setAuthError] = useState('');
+  const [siteCode, setSiteCode] = useState('');
+  const [siteCodeError, setSiteCodeError] = useState('');
+  const [siteUnlocked, setSiteUnlocked] = useState(() => (
+    Boolean(shareTarget?.shareId) || localStorage.getItem(SITE_ACCESS_KEY) === '1'
+  ));
+  const [syncError, setSyncError] = useState('');
   const [remoteReady, setRemoteReady] = useState(!isSupabaseConfigured);
   const [syncStatus, setSyncStatus] = useState(isSupabaseConfigured ? 'Loading' : 'Saved');
   const [remoteConflict, setRemoteConflict] = useState(null);
@@ -397,33 +398,22 @@ export default function App() {
     if (!isSupabaseConfigured) return undefined;
     let mounted = true;
 
-    const authParams = new URLSearchParams(window.location.hash.slice(1));
-    if (authParams.get('error_code')) {
-      setAuthError('That email link expired. Request a sign-in code below.');
-      window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`);
-    }
+    const openLocalArchive = () => {
+      setProjects((current) => Object.keys(current).length ? current : loadCachedProjects() || initialProjectsData);
+      setRemoteReady(true);
+      setSyncStatus('Saved');
+    };
 
     supabase.auth.getSession().then(({ data, error }) => {
       if (!mounted) return;
-      if (error) setAuthError(error.message);
+      if (error) setSyncError(error.message);
       setSession(data.session);
-      setAuthReady(true);
+      if (!data.session) openLocalArchive();
     });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, nextSession) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       if (!mounted) return;
-      if (event === 'SIGNED_OUT') {
-        clearTimeout(saveTimerRef.current);
-        localStorage.removeItem(STORAGE_KEY);
-        localStorage.removeItem(RECENT_KEY);
-        localStorage.removeItem(CONFLICT_BACKUP_KEY);
-        applyingRemoteRef.current = true;
-        dirtyRef.current = false;
-        setConflict(null);
-        setRemoteReady(false);
-        setProjects({});
-      }
       setSession(nextSession);
-      setAuthReady(true);
+      if (!nextSession) openLocalArchive();
     });
     return () => {
       mounted = false;
@@ -459,7 +449,7 @@ export default function App() {
     })()
       .catch((error) => {
         if (!cancelled) {
-          setAuthError(error.message);
+          setSyncError(error.message);
           setSyncStatus('Offline');
         }
       })
@@ -475,9 +465,7 @@ export default function App() {
   useEffect(() => {
     latestProjectsRef.current = projects;
     if (shareTarget?.shareId) return;
-    if (!isSupabaseConfigured || sessionRef.current?.user) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
-    }
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
     if (applyingRemoteRef.current && !remoteReady) return;
     if (applyingRemoteRef.current) {
       applyingRemoteRef.current = false;
@@ -780,9 +768,7 @@ export default function App() {
                   <span className={`archive-sync-dot archive-sync-dot--${syncStatus.toLowerCase()}`} aria-hidden="true" />
                   {syncStatus}
                 </button>
-                {isSupabaseConfigured && (
-                  <button type="button" onClick={signOut} className="archive-home-utility-button">Sign out</button>
-                )}
+                <button type="button" onClick={lockSite} className="archive-home-utility-button">Lock</button>
               </div>
             </div>
             <div className="archive-home-hero">
@@ -1051,76 +1037,21 @@ export default function App() {
     });
   };
 
-  const sendEmailOtp = async (event) => {
+  const unlockSite = (event) => {
     event.preventDefault();
-    setAuthError('');
-    setAuthMessage('');
-    setIsAuthSubmitting(true);
-    try {
-      const { error } = await supabase.auth.signInWithOtp({
-        email: loginEmail.trim(),
-        options: { shouldCreateUser: false }
-      });
-      if (error) {
-        setAuthError(error.message);
-        return;
-      }
-      setOtpSent(true);
-      setLoginOtp('');
-      setAuthMessage('Code sent. Check your email.');
-    } catch (error) {
-      setAuthError(error.message || 'Could not send a sign-in code.');
-    } finally {
-      setIsAuthSubmitting(false);
-    }
-  };
-
-  const verifyEmailOtp = async (event) => {
-    event.preventDefault();
-    const token = normalizeEmailOtp(loginOtp);
-    setAuthError('');
-    setAuthMessage('');
-    if (token.length !== 6) {
-      setAuthError('Enter the six-digit code from your email.');
+    if (siteCode !== SITE_PASSCODE) {
+      setSiteCodeError('Invalid access code');
       return;
     }
-
-    setIsAuthSubmitting(true);
-    try {
-      const { error } = await supabase.auth.verifyOtp({
-        email: loginEmail.trim(),
-        token,
-        type: 'email'
-      });
-      if (error) setAuthError(error.message);
-      else setAuthMessage('Code accepted. Opening archive.');
-    } catch (error) {
-      setAuthError(error.message || 'Could not verify the sign-in code.');
-    } finally {
-      setIsAuthSubmitting(false);
-    }
+    localStorage.setItem(SITE_ACCESS_KEY, '1');
+    setSiteCodeError('');
+    setSiteUnlocked(true);
   };
 
-  const signOut = async () => {
-    if (dirtyRef.current || conflictRef.current) {
-      const confirmed = await feedback.confirmAction({
-        title: 'Sign out with local changes',
-        message: 'Unsynced browser changes will be removed from this device.',
-        confirmText: 'Sign out',
-        tone: 'danger'
-      });
-      if (!confirmed) return;
-    }
-    clearTimeout(saveTimerRef.current);
-    localStorage.removeItem(STORAGE_KEY);
-    localStorage.removeItem(RECENT_KEY);
-    localStorage.removeItem(CONFLICT_BACKUP_KEY);
-    applyingRemoteRef.current = true;
-    dirtyRef.current = false;
-    setConflict(null);
-    setRemoteReady(false);
-    setProjects({});
-    await supabase.auth.signOut();
+  const lockSite = () => {
+    localStorage.removeItem(SITE_ACCESS_KEY);
+    setSiteCode('');
+    setSiteUnlocked(false);
   };
 
   const keepLocalVersion = async () => {
@@ -1343,79 +1274,11 @@ export default function App() {
 
   return (
     <div className="h-screen w-screen relative vignette grain" style={{ background: '#0a0a0b', overflow: 'hidden' }}>
-      {isSupabaseConfigured && !authReady ? (
-        <div className="h-full w-full flex items-center justify-center px-6" style={{ color: '#e4decd', zIndex: 10 }}>
-          <div className="max-w-md w-full border p-8 text-center" style={{ borderColor: 'rgba(228,222,205,0.2)', background: '#0d0d0e' }}>
-            <h1 className="font-serif font-bold text-4xl mb-3">AUTHORIZING</h1>
-            <p className="font-mono-tech text-xs uppercase" style={{ opacity: 0.65 }}>Checking the owner session.</p>
-          </div>
-        </div>
-      ) : isSupabaseConfigured && !session ? (
-        <div className="h-full w-full flex items-center justify-center px-6" style={{ color: '#e4decd', zIndex: 10 }}>
-          <form onSubmit={otpSent ? verifyEmailOtp : sendEmailOtp} className="max-w-md w-full border p-8 text-center" style={{ borderColor: 'rgba(228,222,205,0.2)', background: '#0d0d0e' }}>
-            <h1 className="font-serif font-bold text-4xl mb-3">OWNER ACCESS</h1>
-            <p className="font-mono-tech text-xs uppercase mb-6" style={{ opacity: 0.65 }}>
-              {otpSent ? `Enter the code sent to ${loginEmail}.` : 'Enter the pre-approved owner email for a sign-in code.'}
-            </p>
-            {otpSent ? (
-              <input
-                type="text"
-                required
-                autoFocus
-                autoComplete="one-time-code"
-                inputMode="numeric"
-                pattern="[0-9]{6}"
-                maxLength={6}
-                value={loginOtp}
-                onChange={(event) => {
-                  setLoginOtp(normalizeEmailOtp(event.target.value));
-                  setAuthError('');
-                  setAuthMessage('');
-                }}
-                className="w-full p-4 bg-transparent text-center font-mono-tech text-2xl tracking-[0.45em] focus:outline-none"
-                style={{ border: '1px solid rgba(228,222,205,0.45)', color: '#e4decd' }}
-                aria-label="Owner sign-in code"
-                placeholder="000000"
-              />
-            ) : (
-              <input
-                type="email"
-                required
-                autoFocus
-                autoComplete="email"
-                value={loginEmail}
-                onChange={(event) => {
-                  setLoginEmail(event.target.value);
-                  setAuthError('');
-                  setAuthMessage('');
-                }}
-                className="w-full p-4 bg-transparent font-mono-tech text-sm focus:outline-none"
-                style={{ border: '1px solid rgba(228,222,205,0.45)', color: '#e4decd' }}
-                aria-label="Owner email"
-                placeholder="owner@example.com"
-              />
-            )}
-            {(authError || authMessage) && (
-              <p className="font-mono-tech text-[10px] uppercase mt-3" style={{ color: authError ? '#ff5f57' : '#8bd49c' }} role="status">
-                {authError || authMessage}
-              </p>
-            )}
-            <button type="submit" disabled={isAuthSubmitting} className="mt-6 w-full py-3 border font-display font-bold uppercase cursor-pointer disabled:cursor-wait disabled:opacity-50" style={{ borderColor: '#e4decd', color: '#e4decd', background: 'transparent', letterSpacing: '0.12em' }}>
-              {isAuthSubmitting ? 'Please wait...' : otpSent ? 'Verify code' : 'Send code'}
-            </button>
-            {otpSent && (
-              <div className="mt-3 grid grid-cols-2 gap-2">
-                <button type="button" onClick={sendEmailOtp} disabled={isAuthSubmitting} className="border px-3 py-2 font-mono-tech text-[9px] uppercase disabled:opacity-50" style={{ borderColor: 'rgba(228,222,205,0.35)', color: '#e4decd' }}>Send new code</button>
-                <button type="button" onClick={() => { setOtpSent(false); setLoginOtp(''); setAuthError(''); setAuthMessage(''); }} className="border px-3 py-2 font-mono-tech text-[9px] uppercase" style={{ borderColor: 'rgba(228,222,205,0.35)', color: '#e4decd' }}>Change email</button>
-              </div>
-            )}
-          </form>
-        </div>
-      ) : isSupabaseConfigured && !remoteReady ? (
+      {session && !remoteReady ? (
         <div className="h-full w-full flex items-center justify-center px-6" style={{ color: '#e4decd', zIndex: 10 }}>
           <div className="max-w-md w-full border p-8 text-center" style={{ borderColor: 'rgba(228,222,205,0.2)', background: '#0d0d0e' }}>
             <h1 className="font-serif font-bold text-4xl mb-3">LOADING ARCHIVE</h1>
-            <p className="font-mono-tech text-xs uppercase" style={{ opacity: 0.65 }}>{authError || 'Claiming the private archive.'}</p>
+            <p className="font-mono-tech text-xs uppercase" style={{ opacity: 0.65 }}>{syncError || 'Loading your archive.'}</p>
           </div>
         </div>
       ) : shareTarget?.shareId && !sharedProjects && !shareError ? (
@@ -1435,6 +1298,33 @@ export default function App() {
               This shared documentation link is invalid or unavailable.
             </p>
           </div>
+        </div>
+      ) : !shareTarget?.shareId && !siteUnlocked ? (
+        <div className="h-full w-full flex items-center justify-center px-6" style={{ color: '#e4decd', zIndex: 10 }}>
+          <form onSubmit={unlockSite} className="max-w-md w-full border p-8 text-center" style={{ borderColor: 'rgba(228,222,205,0.2)', background: '#0d0d0e' }}>
+            <h1 className="font-serif font-bold text-4xl mb-3">ACCESS CODE</h1>
+            <p className="font-mono-tech text-xs uppercase mb-6" style={{ opacity: 0.65 }}>Enter the 6 digit code to access Archivolt.</p>
+            <input
+              type="text"
+              required
+              autoFocus
+              autoComplete="off"
+              inputMode="numeric"
+              pattern="[0-9]{6}"
+              maxLength={6}
+              value={siteCode}
+              onChange={(event) => {
+                setSiteCode(event.target.value.replace(/\D/g, '').slice(0, 6));
+                setSiteCodeError('');
+              }}
+              className="w-full p-4 bg-transparent text-center font-mono-tech text-2xl tracking-[0.45em] focus:outline-none"
+              style={{ border: '1px solid rgba(228,222,205,0.45)', color: '#e4decd' }}
+              aria-label="Site access code"
+              placeholder="000000"
+            />
+            {siteCodeError && <p className="font-mono-tech text-[10px] uppercase mt-3" style={{ color: '#ff5f57' }} role="alert">{siteCodeError}</p>}
+            <button type="submit" className="mt-6 w-full py-3 border font-display font-bold uppercase cursor-pointer" style={{ borderColor: '#e4decd', color: '#e4decd', background: 'transparent', letterSpacing: '0.12em' }}>Unlock</button>
+          </form>
         </div>
       ) : hasProjects && isHomeScreen && !shareTarget ? (
         renderHomeScreen()
@@ -1475,7 +1365,7 @@ export default function App() {
           isSharedView={Boolean(shareTarget)}
           syncStatus={syncStatus}
           onResolveConflict={() => setConflictOpen(true)}
-          onSignOut={isSupabaseConfigured ? signOut : null}
+          onSignOut={lockSite}
           goHome={goHome}
         />
       ) : (
@@ -1500,7 +1390,7 @@ export default function App() {
           </div>
         </div>
       )}
-      {!shareTarget && hasProjects && (
+      {siteUnlocked && !shareTarget && hasProjects && (
         <QuickNoteComposer
           open={isQuickNoteOpen}
           projects={visibleProjects}
@@ -1511,7 +1401,7 @@ export default function App() {
           onAdvanced={openAdvancedDraft}
         />
       )}
-      {remoteConflict && conflictOpen && (
+      {siteUnlocked && remoteConflict && conflictOpen && (
         <div className="fixed inset-0 z-[90] grid place-items-center bg-black/70 px-4" role="dialog" aria-modal="true" aria-label="Resolve archive conflict">
           <div className="w-full max-w-lg border-2 p-6" style={{ borderColor: '#e4decd', background: '#111213', color: '#e4decd' }}>
             <h2 className="font-serif text-3xl font-bold uppercase">Sync Conflict</h2>
