@@ -126,7 +126,7 @@ export const createAssetUrlMap = async (projects) => {
 export const uploadImage = async (file, folder = 'uploads') => {
   if (!file) return null;
 
-  if (!isSupabaseConfigured) {
+  if (!isSupabaseConfigured || !(await supabase.auth.getSession()).data.session) {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => resolve(reader.result);
